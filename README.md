@@ -36,10 +36,10 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "fusesearch": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8001/mcp"]
+      "args": ["-y", "mcp-remote", "http://localhost:8001/mcp", "--allow-http"]
     }
   }
 }
 ```
 
-Requires Node.js >= 18.
+Requires Node.js >= 18. `--allow-http` is required for plain HTTP (not needed for HTTPS).
