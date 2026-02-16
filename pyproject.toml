@@ -2,7 +2,18 @@
 name = "fusesearch"
 version = "0.1.0"
 description = "Multi-source search aggregation tool with AI-powered retrieval and response synthesis"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+authors = [
+    { name = "Anton Lebedev", email = "pypi@katzo.net" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "pydantic>=2.12",
     "qdrant-client>=1.16",

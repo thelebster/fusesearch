@@ -3,7 +3,8 @@ export
 
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt \
-        index search mcp
+        index search mcp \
+        package publish
 
 ## help    : Print commands help.
 help : Makefile
@@ -61,6 +62,15 @@ lint:
 ## fmt     : Auto-format code with ruff.
 fmt:
 	docker compose run --rm fusesearch ruff format fusesearch/
+
+## package : Build Python package (wheel + sdist) into dist/.
+package:
+	docker build -f docker/build.Dockerfile -t fusesearch-build .
+	docker run --rm -v ./dist:/out fusesearch-build
+
+## publish : Publish package to PyPI (requires PYPI_TOKEN in .env).
+publish: package
+	docker run --rm fusesearch-build twine upload /app/dist/* -u __token__ -p $${PYPI_TOKEN}
 
 ## clean   : Stop services and remove volumes.
 clean:
