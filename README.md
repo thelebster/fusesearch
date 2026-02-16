@@ -1,6 +1,20 @@
 # FuseSearch
 
+[![PyPI](https://img.shields.io/pypi/v/fusesearch)](https://pypi.org/project/fusesearch/)
+
 Multi-source search aggregation tool that unifies retrieval across diverse data sources — Confluence, MCP servers, local files, and more — using AI-powered search and response synthesis through a single query interface.
+
+## Installation
+
+```bash
+pip install fusesearch
+```
+
+With all optional dependencies (MCP server, local embeddings):
+
+```bash
+pip install fusesearch[all]
+```
 
 ## Quick Start
 
