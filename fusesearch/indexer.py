@@ -1,3 +1,5 @@
+from tqdm import tqdm
+
 from fusesearch.core.chunker import chunk_document
 from fusesearch.core.embedder import Embedder
 from fusesearch.models import Chunk, Document
@@ -20,7 +22,7 @@ class Indexer:
         """
         # Chunk all documents
         all_chunks: list[Chunk] = []
-        for doc in documents:
+        for doc in tqdm(documents, desc="Chunking", unit="doc"):
             all_chunks.extend(chunk_document(doc))
 
         # Diff against existing index
@@ -33,14 +35,19 @@ class Indexer:
         to_delete = existing_ids - new_ids
 
         # Delete removed chunks
-        self.store.delete_by_hashes(to_delete)
+        if to_delete:
+            self.store.delete_by_hashes(to_delete)
 
         # Embed and store new chunks in batches
-        for i in range(0, len(to_add), EMBED_BATCH_SIZE):
-            batch = to_add[i : i + EMBED_BATCH_SIZE]
-            texts = [chunk.content for chunk in batch]
-            embeddings = self.embedder.embed(texts)
-            self.store.upsert(batch, embeddings)
+        if to_add:
+            pbar = tqdm(total=len(to_add), desc="Embedding", unit="chunk")
+            for i in range(0, len(to_add), EMBED_BATCH_SIZE):
+                batch = to_add[i : i + EMBED_BATCH_SIZE]
+                texts = [chunk.content for chunk in batch]
+                embeddings = self.embedder.embed(texts)
+                self.store.upsert(batch, embeddings)
+                pbar.update(len(batch))
+            pbar.close()
 
         return {
             "total_chunks": len(all_chunks),

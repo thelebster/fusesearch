@@ -8,6 +8,7 @@ dependencies = [
     "qdrant-client>=1.16",
     "fastapi>=0.129",
     "uvicorn>=0.40",
+    "tqdm>=4.67",
 ]
 
 [project.optional-dependencies]
