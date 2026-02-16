@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fusesearch"
-version = "0.1.0"
+version = "0.1.1"
 description = "Multi-source search aggregation tool with AI-powered retrieval and response synthesis"
 readme = "README.md"
 license = "MIT"
@@ -36,3 +40,8 @@ dev = [
     "pytest>=9.0",
     "ruff>=0.15",
 ]
+
+[project.urls]
+Homepage = "https://github.com/thelebster/fusesearch"
+Repository = "https://github.com/thelebster/fusesearch"
+Issues = "https://github.com/thelebster/fusesearch/issues"

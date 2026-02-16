@@ -3,12 +3,13 @@ import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from fusesearch import __version__
 from fusesearch.core.embedder import LocalEmbedder
 from fusesearch.indexer import Indexer
 from fusesearch.sources.local_files import LocalFilesAdapter
 from fusesearch.store.qdrant import QdrantStore
 
-app = FastAPI(title="FuseSearch", version="0.1.0")
+app = FastAPI(title="FuseSearch", version=__version__)
 
 embedder = LocalEmbedder()
 
