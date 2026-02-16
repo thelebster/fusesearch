@@ -1,0 +1,26 @@
+[project]
+name = "fusesearch"
+version = "0.1.0"
+description = "Multi-source search aggregation tool with AI-powered retrieval and response synthesis"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.12",
+    "qdrant-client>=1.16",
+    "fastapi>=0.129",
+    "uvicorn>=0.40",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "mcp[cli]>=1.26",
+]
+local = [
+    "sentence-transformers>=5.2",
+]
+all = [
+    "fusesearch[mcp,local]",
+]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.15",
+]

@@ -1,0 +1,13 @@
+# Local development overrides.
+# cp docker/docker-compose.override.example.yml docker-compose.override.yml
+
+services:
+  fusesearch:
+    build:
+      args:
+        INSTALL_EXTRAS: all,dev
+
+  fusesearch-mcp:
+    build:
+      args:
+        INSTALL_EXTRAS: all,dev
