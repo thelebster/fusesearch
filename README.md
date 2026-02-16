@@ -4,6 +4,8 @@
 
 Multi-source search aggregation tool that unifies retrieval across diverse data sources — Confluence, MCP servers, local files, and more — using AI-powered search and response synthesis through a single query interface.
 
+![FuseSearch in Claude Desktop](docs/media/claude-desktop-search.png)
+
 ## Installation
 
 ```bash
@@ -108,6 +110,8 @@ The reranker is independent of the embedding provider — it works on raw text, 
 ## Ask (LLM Synthesis)
 
 The `ask` command searches your indexed documents and uses an LLM to synthesize an answer with citations. This is optional — search works without any LLM provider installed.
+
+![Terminal ask demo](docs/media/terminal-ask.png)
 
 ### Usage
 
