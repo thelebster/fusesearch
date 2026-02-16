@@ -5,7 +5,11 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP(
     "FuseSearch",
-    instructions="Search across indexed documents using hybrid vector + keyword search.",
+    instructions=(
+        "FuseSearch is a knowledge base with indexed documents, blog posts, and notes. "
+        "Use this server when the user asks factual questions, wants to look up a topic, "
+        "or needs information that might exist in indexed sources."
+    ),
     host=os.getenv("MCP_HOST", "0.0.0.0"),
     port=int(os.getenv("MCP_PORT", "8001")),
 )
@@ -39,7 +43,7 @@ def _get_store():
 
 @mcp.tool()
 def search(query: str, limit: int = 5) -> str:
-    """Search indexed documents. Returns relevant chunks ranked by hybrid vector + keyword matching."""
+    """Search the FuseSearch knowledge base. Use this tool whenever the user asks a factual or knowledge question — about a topic, concept, person, event, or anything that indexed documents might answer. Returns relevant document chunks with source titles and scores. Always search BEFORE answering knowledge questions."""
     embedder = _get_embedder()
     store = _get_store()
 
