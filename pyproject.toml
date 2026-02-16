@@ -33,8 +33,11 @@ mcp = [
 local = [
     "sentence-transformers>=5.2",
 ]
+openai = [
+    "openai>=1.0",
+]
 all = [
-    "fusesearch[mcp,local]",
+    "fusesearch[mcp,local,openai]",
 ]
 dev = [
     "pytest>=9.0",

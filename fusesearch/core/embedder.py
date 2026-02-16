@@ -7,6 +7,11 @@ class Embedder(ABC):
 
     @property
     @abstractmethod
+    def name(self) -> str:
+        """Short identifier used for collection naming (e.g. 'local', 'openai')."""
+
+    @property
+    @abstractmethod
     def dimension(self) -> int:
         """Dimension of the embedding vectors."""
 
@@ -16,6 +21,29 @@ class Embedder(ABC):
 
     def embed_one(self, text: str) -> list[float]:
         return self.embed([text])[0]
+
+
+class OpenAIEmbedder(Embedder):
+    """OpenAI embedding provider."""
+
+    def __init__(self, model: str = "text-embedding-3-small", api_key: str | None = None):
+        from openai import OpenAI
+
+        self.model = model
+        self.client = OpenAI(api_key=api_key, max_retries=10)
+        self._dimension = 1536
+
+    @property
+    def name(self) -> str:
+        return "openai"
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        response = self.client.embeddings.create(input=texts, model=self.model)
+        return [item.embedding for item in response.data]
 
 
 class LocalEmbedder(Embedder):
@@ -29,9 +57,23 @@ class LocalEmbedder(Embedder):
         self._dimension = self.model.get_sentence_embedding_dimension()
 
     @property
+    def name(self) -> str:
+        return "local"
+
+    @property
     def dimension(self) -> int:
         return self._dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         embeddings = self.model.encode(texts)
         return embeddings.tolist()
+
+
+def create_embedder(provider: str | None = None) -> Embedder:
+    """Create an embedder based on provider name or FUSESEARCH_EMBEDDER env var."""
+    provider = provider or os.getenv("FUSESEARCH_EMBEDDER", "local")
+    if provider == "openai":
+        return OpenAIEmbedder()
+    if provider == "local":
+        return LocalEmbedder()
+    raise ValueError(f"Unknown embedder provider: {provider}")

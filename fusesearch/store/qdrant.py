@@ -23,9 +23,19 @@ def hash_to_uuid(content_hash: str) -> str:
 class QdrantStore:
     """Vector store backed by Qdrant."""
 
-    def __init__(self, host: str = "localhost", port: int = 6333, dimension: int = 384):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 6333,
+        dimension: int = 384,
+        collection_suffix: str | None = None,
+    ):
         self.client = QdrantClient(host=host, port=port)
-        self.collection_name = os.getenv("FUSESEARCH_COLLECTION", "fusesearch")
+        base = os.getenv("FUSESEARCH_COLLECTION", "fusesearch")
+        if collection_suffix and collection_suffix != "local":
+            self.collection_name = f"{base}-{collection_suffix}"
+        else:
+            self.collection_name = base
         self.dimension = dimension
         self._ensure_collection()
 

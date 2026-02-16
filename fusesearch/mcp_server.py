@@ -12,6 +12,11 @@ mcp = FastMCP(
     ),
     host=os.getenv("MCP_HOST", "0.0.0.0"),
     port=int(os.getenv("MCP_PORT", "8001")),
+    # Stateless mode: each request is independent, no persistent sessions.
+    # Prevents 404 errors when clients reconnect after server restarts (e.g. Docker rebuild).
+    # Disable if you need server-to-client notifications or server-initiated sampling.
+    # https://gofastmcp.com/python-sdk/fastmcp-server-http
+    stateless_http=os.getenv("MCP_STATELESS", "true").lower() == "true",
 )
 
 # Lazy-initialized globals
@@ -22,9 +27,9 @@ _store = None
 def _get_embedder():
     global _embedder
     if _embedder is None:
-        from fusesearch.core.embedder import LocalEmbedder
+        from fusesearch.core.embedder import create_embedder
 
-        _embedder = LocalEmbedder()
+        _embedder = create_embedder()
     return _embedder
 
 
@@ -33,10 +38,12 @@ def _get_store():
     if _store is None:
         from fusesearch.store.qdrant import QdrantStore
 
+        embedder = _get_embedder()
         _store = QdrantStore(
             host=os.getenv("QDRANT_HOST", "localhost"),
             port=int(os.getenv("QDRANT_PORT", "6333")),
-            dimension=_get_embedder().dimension,
+            dimension=embedder.dimension,
+            collection_suffix=embedder.name,
         )
     return _store
 

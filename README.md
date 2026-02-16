@@ -10,7 +10,7 @@ Multi-source search aggregation tool that unifies retrieval across diverse data 
 pip install fusesearch
 ```
 
-With all optional dependencies (MCP server, local embeddings):
+With all optional dependencies (MCP server, local embeddings, OpenAI):
 
 ```bash
 pip install fusesearch[all]
@@ -24,6 +24,42 @@ make start
 make index    # index docs from data/docs
 make search "your query"
 ```
+
+## Embedding Providers
+
+FuseSearch supports two embedding providers. Each uses a separate Qdrant collection due to different vector dimensions.
+
+| | Local (default) | OpenAI |
+|---|---|---|
+| **Model** | all-MiniLM-L6-v2 (384 dims) | text-embedding-3-small (1536 dims) |
+| **Quality** | Good for general English | Better for nuanced/complex queries |
+| **Cost** | Free | ~$0.02 per 1M tokens |
+| **Privacy** | Data stays local | Data sent to OpenAI |
+| **Offline** | Yes | No |
+
+### Local (default)
+
+Uses [sentence-transformers](https://www.sbert.net/). Runs entirely on your machine, no API key needed.
+
+### OpenAI
+
+Uses [OpenAI](https://platform.openai.com/)'s API. Higher quality embeddings but requires an API key.
+
+To use OpenAI embeddings, add to your `.env`:
+
+```env
+FUSESEARCH_EMBEDDER=openai
+OPENAI_API_KEY=sk-...
+```
+
+Or pass via CLI:
+
+```bash
+fusesearch --embedder openai index data/docs
+fusesearch --embedder openai search "your query"
+```
+
+**Rate limits:** OpenAI Tier 1 accounts have a 40k tokens-per-minute limit on embeddings. FuseSearch retries automatically on rate limit errors, but initial indexing of large document sets will be slow. Higher tiers (auto-upgrade as you spend) increase this significantly. See [OpenAI rate limits](https://platform.openai.com/docs/guides/rate-limits).
 
 ## MCP Server
 

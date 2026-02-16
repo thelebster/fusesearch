@@ -4,18 +4,23 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from fusesearch import __version__
-from fusesearch.core.embedder import LocalEmbedder
+from fusesearch.core.embedder import create_embedder
 from fusesearch.indexer import Indexer
 from fusesearch.sources.local_files import LocalFilesAdapter
 from fusesearch.store.qdrant import QdrantStore
 
 app = FastAPI(title="FuseSearch", version=__version__)
 
-embedder = LocalEmbedder()
+embedder = create_embedder()
 
 qdrant_host = os.getenv("QDRANT_HOST", "localhost")
 qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-store = QdrantStore(host=qdrant_host, port=qdrant_port, dimension=embedder.dimension)
+store = QdrantStore(
+    host=qdrant_host,
+    port=qdrant_port,
+    dimension=embedder.dimension,
+    collection_suffix=embedder.name,
+)
 indexer = Indexer(store=store, embedder=embedder)
 
 

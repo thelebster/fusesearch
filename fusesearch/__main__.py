@@ -2,10 +2,10 @@ import argparse
 import os
 
 
-def _make_embedder():
-    from fusesearch.core.embedder import LocalEmbedder
+def _make_embedder(provider: str | None = None):
+    from fusesearch.core.embedder import create_embedder
 
-    return LocalEmbedder()
+    return create_embedder(provider)
 
 
 def _make_store(embedder):
@@ -15,6 +15,7 @@ def _make_store(embedder):
         host=os.getenv("QDRANT_HOST", "localhost"),
         port=int(os.getenv("QDRANT_PORT", "6333")),
         dimension=embedder.dimension,
+        collection_suffix=embedder.name,
     )
 
 
@@ -30,7 +31,7 @@ def cmd_index(args):
     from fusesearch.indexer import Indexer
     from fusesearch.sources.local_files import LocalFilesAdapter
 
-    embedder = _make_embedder()
+    embedder = _make_embedder(args.embedder)
     store = _make_store(embedder)
 
     adapter = LocalFilesAdapter(directories=args.paths)
@@ -46,7 +47,7 @@ def cmd_index(args):
 
 
 def cmd_search(args):
-    embedder = _make_embedder()
+    embedder = _make_embedder(args.embedder)
     store = _make_store(embedder)
     hybrid = not args.no_hybrid
 
@@ -69,6 +70,12 @@ def cmd_search(args):
 def main():
     parser = argparse.ArgumentParser(
         prog="fusesearch", description="FuseSearch - multi-source search"
+    )
+    parser.add_argument(
+        "--embedder",
+        choices=["local", "openai"],
+        default=None,
+        help="Embedding provider (default: FUSESEARCH_EMBEDDER env var or 'local')",
     )
     subparsers = parser.add_subparsers(dest="command")
 
