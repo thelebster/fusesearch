@@ -72,7 +72,7 @@ def count() -> str:
 Transport = Literal["stdio", "sse", "streamable-http"]
 
 
-def main(transport: Transport = "stdio"):
+def main(transport: Transport = "streamable-http"):
     mcp.run(transport=transport)
 
 

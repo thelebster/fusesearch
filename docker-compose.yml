@@ -26,7 +26,7 @@ services:
 
   fusesearch-mcp:
     <<: *fusesearch
-    command: python -m fusesearch mcp --transport sse
+    command: python -m fusesearch mcp --transport streamable-http
     ports:
       - "${MCP_PORT:-8001}:8001"
 

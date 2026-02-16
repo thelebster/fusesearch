@@ -49,9 +49,9 @@ search:
 
 ## mcp     : Show MCP server URL for Claude Code config.
 mcp:
-	@echo "MCP server running at http://localhost:$${MCP_PORT:-8001}/sse"
+	@echo "MCP server running at http://localhost:$${MCP_PORT:-8001}/mcp"
 	@echo ""
-	@echo "Add to Claude Code:  claude mcp add fusesearch http://localhost:$${MCP_PORT:-8001}/sse --transport sse"
+	@echo "Add to Claude Code:  claude mcp add fusesearch http://localhost:$${MCP_PORT:-8001}/mcp --transport http"
 
 ## lint    : Run ruff linter and formatter check.
 lint:
