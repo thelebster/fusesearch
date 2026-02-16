@@ -1,6 +1,7 @@
 import os
 from abc import ABC, abstractmethod
 
+
 class Embedder(ABC):
     """Abstract base class for embedding providers."""
 

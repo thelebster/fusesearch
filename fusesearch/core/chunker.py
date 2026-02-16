@@ -52,7 +52,7 @@ def _split_by_headings(text: str) -> list[tuple[list[str], str]]:
         title = match.group(2).strip()
 
         # Update heading stack — pop headings at same or deeper level
-        heading_stack = [(l, t) for l, t in heading_stack if l < level]
+        heading_stack = [(lvl, t) for lvl, t in heading_stack if lvl < level]
         heading_stack.append((level, title))
 
         # Extract content between this heading and the next

@@ -19,6 +19,7 @@ def hash_to_uuid(content_hash: str) -> str:
     """Convert a SHA-256 hex string to a UUID (uses first 32 hex chars)."""
     return str(uuid.UUID(content_hash[:32]))
 
+
 class QdrantStore:
     """Vector store backed by Qdrant."""
 
@@ -151,10 +152,7 @@ class QdrantStore:
                 result_map[rid] = result
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return [
-            {**result_map[rid], "score": score}
-            for rid, score in ranked
-        ]
+        return [{**result_map[rid], "score": score} for rid, score in ranked]
 
     def get_existing_hashes(self) -> set[str]:
         """Get all content hashes currently in the store."""

@@ -2,7 +2,7 @@
 export
 
 .PHONY: help \
-        build up start stop down restart logs status clean lint \
+        build up start stop down restart logs status clean lint fmt \
         index search mcp
 
 ## help    : Print commands help.
@@ -57,6 +57,10 @@ mcp:
 lint:
 	docker compose run --rm fusesearch ruff check fusesearch/
 	docker compose run --rm fusesearch ruff format --check fusesearch/
+
+## fmt     : Auto-format code with ruff.
+fmt:
+	docker compose run --rm fusesearch ruff format fusesearch/
 
 ## clean   : Stop services and remove volumes.
 clean:

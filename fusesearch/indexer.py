@@ -27,7 +27,9 @@ class Indexer:
         new_ids = {hash_to_uuid(chunk.content_hash) for chunk in all_chunks}
         existing_ids = self.store.get_existing_hashes()
 
-        to_add = [c for c in all_chunks if hash_to_uuid(c.content_hash) not in existing_ids]
+        to_add = [
+            c for c in all_chunks if hash_to_uuid(c.content_hash) not in existing_ids
+        ]
         to_delete = existing_ids - new_ids
 
         # Delete removed chunks

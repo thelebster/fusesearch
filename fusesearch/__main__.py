@@ -39,7 +39,9 @@ def cmd_index(args):
 
     indexer = Indexer(store=store, embedder=embedder)
     stats = indexer.index_documents(documents)
-    print(f"Indexed: {stats['new']} new, {stats['skipped']} skipped, {stats['deleted']} deleted")
+    print(
+        f"Indexed: {stats['new']} new, {stats['skipped']} skipped, {stats['deleted']} deleted"
+    )
     print(f"Total chunks in store: {store.count()}")
 
 
@@ -65,7 +67,9 @@ def cmd_search(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="fusesearch", description="FuseSearch - multi-source search")
+    parser = argparse.ArgumentParser(
+        prog="fusesearch", description="FuseSearch - multi-source search"
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     # Serve command (default)
@@ -74,18 +78,27 @@ def main():
     serve_parser.add_argument("--port", default=None, help="Port to bind to")
 
     # Index command
-    index_parser = subparsers.add_parser("index", help="Index documents from local files")
+    index_parser = subparsers.add_parser(
+        "index", help="Index documents from local files"
+    )
     index_parser.add_argument("paths", nargs="+", help="Directories to index")
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search indexed documents")
     search_parser.add_argument("query", help="Search query")
     search_parser.add_argument("--limit", type=int, default=5, help="Number of results")
-    search_parser.add_argument("--no-hybrid", action="store_true", help="Disable hybrid search (vector-only)")
+    search_parser.add_argument(
+        "--no-hybrid", action="store_true", help="Disable hybrid search (vector-only)"
+    )
 
     # MCP server command
     mcp_parser = subparsers.add_parser("mcp", help="Start the MCP server")
-    mcp_parser.add_argument("--transport", choices=["stdio", "sse", "streamable-http"], default="stdio", help="Transport type")
+    mcp_parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="Transport type",
+    )
 
     args = parser.parse_args()
 

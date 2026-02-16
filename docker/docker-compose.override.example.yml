@@ -6,8 +6,12 @@ services:
     build:
       args:
         INSTALL_EXTRAS: all,dev
+    volumes:
+      - ./fusesearch:/app/fusesearch
 
   fusesearch-mcp:
     build:
       args:
         INSTALL_EXTRAS: all,dev
+    volumes:
+      - ./fusesearch:/app/fusesearch
