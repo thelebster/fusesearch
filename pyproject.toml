@@ -41,6 +41,9 @@ dev = [
     "ruff>=0.15",
 ]
 
+[tool.setuptools.packages.find]
+include = ["fusesearch*"]
+
 [project.urls]
 Homepage = "https://github.com/thelebster/fusesearch"
 Repository = "https://github.com/thelebster/fusesearch"
