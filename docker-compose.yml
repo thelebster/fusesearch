@@ -22,13 +22,13 @@ services:
   fusesearch:
     <<: *fusesearch
     ports:
-      - "${FUSESEARCH_PORT:-8000}:8000"
+      - "${BIND_ADDRESS:-0.0.0.0}:${FUSESEARCH_PORT:-8000}:8000"
 
   fusesearch-mcp:
     <<: *fusesearch
     command: python -m fusesearch mcp --transport streamable-http
     ports:
-      - "${MCP_PORT:-8001}:8001"
+      - "${BIND_ADDRESS:-0.0.0.0}:${MCP_PORT:-8001}:8001"
 
   qdrant:
     build:
