@@ -99,6 +99,19 @@ def search(
     return "\n\n---\n\n".join(parts)
 
 
+@mcp.prompt()
+def ask(question: str) -> str:
+    """Ask a question about the indexed knowledge base. Use the search tool to find relevant documents, then synthesize an answer with citations."""
+    return (
+        f"Use the FuseSearch search tool to answer this question: {question}\n\n"
+        "Instructions:\n"
+        "1. Search for relevant documents using the search tool (try multiple queries if needed)\n"
+        "2. Synthesize a clear, concise answer based on the search results\n"
+        "3. Cite sources using [1], [2], etc. matching the result numbers\n"
+        "4. If the results don't contain enough information, say so"
+    )
+
+
 @mcp.tool()
 def count() -> str:
     """Return the number of indexed chunks in the store."""

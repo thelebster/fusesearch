@@ -36,8 +36,14 @@ local = [
 openai = [
     "openai>=1.0",
 ]
+anthropic = [
+    "anthropic>=0.40",
+]
+ollama = [
+    "ollama>=0.4",
+]
 all = [
-    "fusesearch[mcp,local,openai]",
+    "fusesearch[mcp,local,openai,anthropic,ollama]",
 ]
 dev = [
     "pytest>=9.0",

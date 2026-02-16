@@ -32,7 +32,13 @@ class LocalReranker(Reranker):
     def __init__(
         self, model: str | None = None, local_files_only: bool = False
     ):
-        from sentence_transformers import CrossEncoder
+        try:
+            from sentence_transformers import CrossEncoder
+        except ImportError:
+            raise ImportError(
+                "Local reranker requires the [local] extra. "
+                "Install with: pip install fusesearch[local]"
+            ) from None
 
         model = model or os.getenv(
             "FUSESEARCH_RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"

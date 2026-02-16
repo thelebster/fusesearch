@@ -27,7 +27,13 @@ class OpenAIEmbedder(Embedder):
     """OpenAI embedding provider."""
 
     def __init__(self, model: str = "text-embedding-3-small", api_key: str | None = None):
-        from openai import OpenAI
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "OpenAI embedder requires the [openai] extra. "
+                "Install with: pip install fusesearch[openai]"
+            ) from None
 
         self.model = model
         self.client = OpenAI(api_key=api_key, max_retries=10)
@@ -50,7 +56,13 @@ class LocalEmbedder(Embedder):
     """Local embedding provider using sentence-transformers."""
 
     def __init__(self, model: str | None = None, local_files_only: bool = False):
-        from sentence_transformers import SentenceTransformer
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            raise ImportError(
+                "Local embedder requires the [local] extra. "
+                "Install with: pip install fusesearch[local]"
+            ) from None
 
         model = model or os.getenv("FUSESEARCH_EMBED_MODEL", "all-MiniLM-L6-v2")
         self.model = SentenceTransformer(model, local_files_only=local_files_only)

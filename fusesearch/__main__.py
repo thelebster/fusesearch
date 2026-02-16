@@ -54,18 +54,7 @@ def cmd_search(args):
     store = _make_store(embedder)
     hybrid = not args.no_hybrid
 
-    fetch_limit = args.limit * RERANK_OVERFETCH if args.rerank else args.limit
-    query_vector = embedder.embed_one(args.query)
-    if hybrid:
-        results = store.hybrid_search(query_vector, args.query, limit=fetch_limit)
-    else:
-        results = store.search(query_vector, limit=fetch_limit)
-
-    if args.rerank:
-        from fusesearch.core.reranker import create_reranker
-
-        reranker = create_reranker()
-        results = reranker.rerank(args.query, results, limit=args.limit)
+    results = _run_search(store, embedder, args.query, args.limit, hybrid, args.rerank)
 
     mode = "hybrid" if hybrid else "vector-only"
     rerank_label = " + rerank" if args.rerank else ""
@@ -76,6 +65,52 @@ def cmd_search(args):
         if result["heading_path"]:
             print(f"Section: {' > '.join(result['heading_path'])}")
         print(f"Content: {result['content'][:300]}...")
+
+
+def _run_search(store, embedder, query, limit, hybrid, rerank):
+    """Shared search logic for cmd_search and cmd_ask."""
+    fetch_limit = limit * RERANK_OVERFETCH if rerank else limit
+    query_vector = embedder.embed_one(query)
+    if hybrid:
+        results = store.hybrid_search(query_vector, query, limit=fetch_limit)
+    else:
+        results = store.search(query_vector, limit=fetch_limit)
+    if rerank:
+        from fusesearch.core.reranker import create_reranker
+
+        reranker = create_reranker()
+        results = reranker.rerank(query, results, limit=limit)
+    return results
+
+
+def cmd_ask(args):
+    import sys
+
+    from fusesearch.core.synthesizer import synthesize
+    from fusesearch.llm import create_llm
+
+    embedder = _make_embedder(args.embedder)
+    store = _make_store(embedder)
+    hybrid = not args.no_hybrid
+
+    results = _run_search(store, embedder, args.query, args.limit, hybrid, args.rerank)
+
+    try:
+        llm = create_llm(args.llm)
+    except ImportError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    response = synthesize(llm, args.query, results)
+
+    print(f"\n{response['answer']}\n")
+    if response["sources"]:
+        print("Sources:")
+        for source in response["sources"]:
+            heading = ""
+            if source["heading_path"]:
+                heading = f" > {' > '.join(source['heading_path'])}"
+            print(f"  [{source['index']}] {source['title']}{heading}")
 
 
 def main():
@@ -120,6 +155,29 @@ def main():
         help="Rerank results with cross-encoder (default: FUSESEARCH_RERANK env var)",
     )
 
+    # Ask command
+    ask_parser = subparsers.add_parser("ask", help="Ask a question and get a synthesized answer")
+    ask_parser.add_argument("query", help="Question to ask")
+    ask_parser.add_argument("--limit", type=int, default=5, help="Number of results to use")
+    ask_parser.add_argument(
+        "--no-hybrid",
+        action="store_true",
+        default=not hybrid_default,
+        help="Disable hybrid search (default: FUSESEARCH_HYBRID env var)",
+    )
+    ask_parser.add_argument(
+        "--rerank",
+        action="store_true",
+        default=rerank_default,
+        help="Rerank results with cross-encoder (default: FUSESEARCH_RERANK env var)",
+    )
+    ask_parser.add_argument(
+        "--llm",
+        choices=["anthropic", "openai", "ollama"],
+        default=None,
+        help="LLM provider (default: FUSESEARCH_LLM env var or 'anthropic')",
+    )
+
     # MCP server command
     mcp_parser = subparsers.add_parser("mcp", help="Start the MCP server")
     mcp_parser.add_argument(
@@ -137,6 +195,8 @@ def main():
         cmd_index(args)
     elif args.command == "search":
         cmd_search(args)
+    elif args.command == "ask":
+        cmd_ask(args)
     elif args.command == "mcp":
         from fusesearch.mcp_server import main as mcp_main
 

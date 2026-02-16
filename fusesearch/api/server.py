@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from fusesearch import __version__
@@ -47,6 +47,14 @@ class SearchRequest(BaseModel):
     vector_weight: float = 0.7
 
 
+class AskRequest(BaseModel):
+    query: str
+    limit: int = 5
+    hybrid: bool = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
+    rerank: bool = rerank_enabled()
+    vector_weight: float = 0.7
+
+
 class IndexRequest(BaseModel):
     paths: list[str]
 
@@ -70,6 +78,31 @@ def search(req: SearchRequest):
         reranker = _get_reranker()
         results = reranker.rerank(req.query, results, limit=req.limit)
     return {"results": results}
+
+
+@app.post("/ask")
+def ask(req: AskRequest):
+    from fusesearch.core.synthesizer import synthesize
+    from fusesearch.llm import create_llm
+
+    fetch_limit = req.limit * RERANK_OVERFETCH if req.rerank else req.limit
+    query_vector = embedder.embed_one(req.query)
+    if req.hybrid:
+        results = store.hybrid_search(
+            query_vector, req.query, limit=fetch_limit, vector_weight=req.vector_weight
+        )
+    else:
+        results = store.search(query_vector, limit=fetch_limit)
+    if req.rerank:
+        reranker = _get_reranker()
+        results = reranker.rerank(req.query, results, limit=req.limit)
+
+    try:
+        llm = create_llm()
+    except ImportError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+    return synthesize(llm, req.query, results)
 
 
 @app.post("/index")

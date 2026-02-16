@@ -3,7 +3,7 @@ export
 
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt \
-        index search mcp \
+        index search ask mcp \
         package publish release
 
 ## help    : Print commands help.
@@ -44,6 +44,10 @@ index:
 ## search  : Search indexed docs. Usage: make search "your query"
 search:
 	docker compose exec fusesearch python -m fusesearch search "$(filter-out $@,$(MAKECMDGOALS))"
+
+## ask     : Ask a question. Usage: make ask "your question"
+ask:
+	docker compose exec fusesearch python -m fusesearch ask "$(filter-out $@,$(MAKECMDGOALS))"
 
 %:
 	@:

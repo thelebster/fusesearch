@@ -105,6 +105,68 @@ FUSESEARCH_RERANK=true
 
 The reranker is independent of the embedding provider — it works on raw text, not vectors. You can use `FUSESEARCH_EMBEDDER=openai` with `FUSESEARCH_RERANK=true`. The local reranker requires the `[local]` extra (`sentence-transformers`).
 
+## Ask (LLM Synthesis)
+
+The `ask` command searches your indexed documents and uses an LLM to synthesize an answer with citations. This is optional — search works without any LLM provider installed.
+
+### Usage
+
+```bash
+fusesearch ask "What is Drupal?"
+```
+
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is Drupal?"}'
+```
+
+### LLM Providers
+
+| Provider | Model | Extra | Cost |
+|---|---|---|---|
+| Anthropic | claude-sonnet-4-20250514 | `[anthropic]` | Pay-as-you-go API |
+| OpenAI | gpt-4o-mini | `[openai]` | Pay-as-you-go API |
+| Ollama | llama3.2 | `[ollama]` | Free (runs locally) |
+
+### Anthropic
+
+Requires a separate API key (a Claude Pro/Team subscription does **not** include API access).
+
+1. Create an account at [console.anthropic.com](https://console.anthropic.com/)
+2. Add billing under **Settings > Billing** (pay-as-you-go)
+3. Create a key under **Settings > API Keys**
+
+```env
+FUSESEARCH_LLM=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### OpenAI
+
+If you already have an API key for OpenAI embeddings, the same key works here.
+
+1. Go to [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Create a new secret key
+
+```env
+FUSESEARCH_LLM=openai
+OPENAI_API_KEY=sk-...
+```
+
+### Ollama
+
+No API key needed. Runs entirely on your machine.
+
+1. Install from [ollama.com](https://ollama.com/)
+2. Pull a model: `ollama pull llama3.2`
+
+```env
+FUSESEARCH_LLM=ollama
+```
+
+If `FUSESEARCH_LLM` is not set, FuseSearch auto-detects the first installed provider. If none are installed, `ask` returns a clear error — search continues to work normally.
+
 ## MCP Server
 
 The `fusesearch-mcp` Docker service exposes a streamable HTTP endpoint on port 8001. Tools: `search` (hybrid search), `count` (indexed chunks).
