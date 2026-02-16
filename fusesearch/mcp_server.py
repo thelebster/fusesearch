@@ -22,6 +22,11 @@ mcp = FastMCP(
 # Lazy-initialized globals
 _embedder = None
 _store = None
+_reranker = None
+
+RERANK_OVERFETCH = 3
+_hybrid_default = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
+_rerank_default = os.getenv("FUSESEARCH_RERANK", "false").lower() == "true"
 
 
 def _get_embedder():
@@ -48,14 +53,35 @@ def _get_store():
     return _store
 
 
+def _get_reranker():
+    global _reranker
+    if _reranker is None:
+        from fusesearch.core.reranker import create_reranker
+
+        _reranker = create_reranker()
+    return _reranker
+
+
 @mcp.tool()
-def search(query: str, limit: int = 5) -> str:
+def search(
+    query: str,
+    limit: int = 5,
+    hybrid: bool = _hybrid_default,
+    rerank: bool = _rerank_default,
+) -> str:
     """Search the FuseSearch knowledge base. Use this tool whenever the user asks a factual or knowledge question — about a topic, concept, person, event, or anything that indexed documents might answer. Returns relevant document chunks with source titles and scores. Always search BEFORE answering knowledge questions."""
     embedder = _get_embedder()
     store = _get_store()
 
+    fetch_limit = limit * RERANK_OVERFETCH if rerank else limit
     query_vector = embedder.embed_one(query)
-    results = store.hybrid_search(query_vector, query, limit=limit)
+    if hybrid:
+        results = store.hybrid_search(query_vector, query, limit=fetch_limit)
+    else:
+        results = store.search(query_vector, limit=fetch_limit)
+    if rerank:
+        reranker = _get_reranker()
+        results = reranker.rerank(query, results, limit=limit)
 
     if not results:
         return "No results found."

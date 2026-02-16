@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from fusesearch import __version__
 from fusesearch.core.embedder import create_embedder
+from fusesearch.core.reranker import rerank_enabled
 from fusesearch.indexer import Indexer
 from fusesearch.sources.local_files import LocalFilesAdapter
 from fusesearch.store.qdrant import QdrantStore
@@ -23,11 +24,26 @@ store = QdrantStore(
 )
 indexer = Indexer(store=store, embedder=embedder)
 
+# Lazy-initialized reranker (only loaded when first rerank request arrives)
+_reranker = None
+
+RERANK_OVERFETCH = 3
+
+
+def _get_reranker():
+    global _reranker
+    if _reranker is None:
+        from fusesearch.core.reranker import create_reranker
+
+        _reranker = create_reranker()
+    return _reranker
+
 
 class SearchRequest(BaseModel):
     query: str
     limit: int = 5
-    hybrid: bool = True
+    hybrid: bool = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
+    rerank: bool = rerank_enabled()
     vector_weight: float = 0.7
 
 
@@ -42,13 +58,17 @@ def health():
 
 @app.post("/search")
 def search(req: SearchRequest):
+    fetch_limit = req.limit * RERANK_OVERFETCH if req.rerank else req.limit
     query_vector = embedder.embed_one(req.query)
     if req.hybrid:
         results = store.hybrid_search(
-            query_vector, req.query, limit=req.limit, vector_weight=req.vector_weight
+            query_vector, req.query, limit=fetch_limit, vector_weight=req.vector_weight
         )
     else:
-        results = store.search(query_vector, limit=req.limit)
+        results = store.search(query_vector, limit=fetch_limit)
+    if req.rerank:
+        reranker = _get_reranker()
+        results = reranker.rerank(req.query, results, limit=req.limit)
     return {"results": results}
 
 

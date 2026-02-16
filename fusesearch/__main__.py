@@ -46,19 +46,30 @@ def cmd_index(args):
     print(f"Total chunks in store: {store.count()}")
 
 
+RERANK_OVERFETCH = 3
+
+
 def cmd_search(args):
     embedder = _make_embedder(args.embedder)
     store = _make_store(embedder)
     hybrid = not args.no_hybrid
 
+    fetch_limit = args.limit * RERANK_OVERFETCH if args.rerank else args.limit
     query_vector = embedder.embed_one(args.query)
     if hybrid:
-        results = store.hybrid_search(query_vector, args.query, limit=args.limit)
+        results = store.hybrid_search(query_vector, args.query, limit=fetch_limit)
     else:
-        results = store.search(query_vector, limit=args.limit)
+        results = store.search(query_vector, limit=fetch_limit)
+
+    if args.rerank:
+        from fusesearch.core.reranker import create_reranker
+
+        reranker = create_reranker()
+        results = reranker.rerank(args.query, results, limit=args.limit)
 
     mode = "hybrid" if hybrid else "vector-only"
-    print(f"Search mode: {mode}")
+    rerank_label = " + rerank" if args.rerank else ""
+    print(f"Search mode: {mode}{rerank_label}")
     for i, result in enumerate(results, 1):
         print(f"\n--- Result {i} (score: {result['score']:.4f}) ---")
         print(f"Title: {result['title']}")
@@ -94,8 +105,19 @@ def main():
     search_parser = subparsers.add_parser("search", help="Search indexed documents")
     search_parser.add_argument("query", help="Search query")
     search_parser.add_argument("--limit", type=int, default=5, help="Number of results")
+    hybrid_default = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
     search_parser.add_argument(
-        "--no-hybrid", action="store_true", help="Disable hybrid search (vector-only)"
+        "--no-hybrid",
+        action="store_true",
+        default=not hybrid_default,
+        help="Disable hybrid search (default: FUSESEARCH_HYBRID env var)",
+    )
+    rerank_default = os.getenv("FUSESEARCH_RERANK", "false").lower() == "true"
+    search_parser.add_argument(
+        "--rerank",
+        action="store_true",
+        default=rerank_default,
+        help="Rerank results with cross-encoder (default: FUSESEARCH_RERANK env var)",
     )
 
     # MCP server command

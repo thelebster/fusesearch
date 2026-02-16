@@ -25,6 +25,14 @@ make index    # index docs from data/docs
 make search "your query"
 ```
 
+## How It Works
+
+```
+Query → Embed → Vector Search  ─┐
+                                ├→ RRF Fusion → Rerank (optional) → Results
+                Keyword Search ─┘
+```
+
 ## Embedding Providers
 
 FuseSearch supports two embedding providers. Each uses a separate Qdrant collection due to different vector dimensions.
@@ -60,6 +68,42 @@ fusesearch --embedder openai search "your query"
 ```
 
 **Rate limits:** OpenAI Tier 1 accounts have a 40k tokens-per-minute limit on embeddings. FuseSearch retries automatically on rate limit errors, but initial indexing of large document sets will be slow. Higher tiers (auto-upgrade as you spend) increase this significantly. See [OpenAI rate limits](https://platform.openai.com/docs/guides/rate-limits).
+
+## Reranking
+
+Reranking uses a [cross-encoder](https://www.sbert.net/docs/cross_encoder/pretrained_models.html) model to rescore search results after retrieval. The cross-encoder evaluates each (query, document) pair directly, producing more accurate relevance scores than initial retrieval alone.
+
+When enabled, FuseSearch overfetches 3x candidates from hybrid search, then reranks down to the requested limit.
+
+### Usage
+
+Per-request via CLI flag or API parameter:
+
+```bash
+fusesearch search "your query" --rerank
+```
+
+```bash
+curl -X POST http://localhost:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your query", "rerank": true}'
+```
+
+Or enable globally via environment variable:
+
+```env
+FUSESEARCH_RERANK=true
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `FUSESEARCH_RERANK` | `false` | Enable reranking globally |
+| `FUSESEARCH_RERANKER` | `local` | Reranker provider |
+| `FUSESEARCH_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder model |
+
+The reranker is independent of the embedding provider — it works on raw text, not vectors. You can use `FUSESEARCH_EMBEDDER=openai` with `FUSESEARCH_RERANK=true`. The local reranker requires the `[local]` extra (`sentence-transformers`).
 
 ## MCP Server
 

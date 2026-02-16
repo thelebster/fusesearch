@@ -4,7 +4,7 @@ export
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt \
         index search mcp \
-        package publish
+        package publish release
 
 ## help    : Print commands help.
 help : Makefile
@@ -71,6 +71,11 @@ package:
 ## publish : Publish package to PyPI (requires PYPI_TOKEN in .env).
 publish: package
 	docker run --rm fusesearch-build twine upload /app/dist/* -u __token__ -p $${PYPI_TOKEN}
+
+## release : Create a GitHub release from the version in pyproject.toml.
+release:
+	$(eval VERSION := $(shell grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/'))
+	gh release create v$(VERSION) --generate-notes --title "v$(VERSION)"
 
 ## clean   : Stop services and remove volumes.
 clean:
