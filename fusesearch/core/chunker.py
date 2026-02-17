@@ -77,7 +77,14 @@ def _split_by_size(text: str, max_size: int) -> list[str]:
     current = ""
 
     for paragraph in paragraphs:
-        if current and len(current) + len(paragraph) + 2 > max_size:
+        # Hard-split oversized paragraphs (e.g. large code blocks, tables)
+        if len(paragraph) > max_size:
+            if current:
+                pieces.append(current)
+                current = ""
+            for i in range(0, len(paragraph), max_size):
+                pieces.append(paragraph[i : i + max_size])
+        elif current and len(current) + len(paragraph) + 2 > max_size:
             pieces.append(current)
             current = paragraph
         else:

@@ -108,7 +108,7 @@ class OllamaEmbedder(Embedder):
         return self._dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        response = self.client.embed(model=self.model, input=texts)
+        response = self.client.embed(model=self.model, input=texts, truncate=True)
         return [list(e) for e in response.embeddings]
 
 
