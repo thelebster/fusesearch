@@ -119,7 +119,7 @@ def main():
     )
     parser.add_argument(
         "--embedder",
-        choices=["local", "openai"],
+        choices=["local", "openai", "ollama"],
         default=None,
         help="Embedding provider (default: FUSESEARCH_EMBEDDER env var or 'local')",
     )

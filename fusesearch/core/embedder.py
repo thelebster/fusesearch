@@ -81,6 +81,37 @@ class LocalEmbedder(Embedder):
         return embeddings.tolist()
 
 
+class OllamaEmbedder(Embedder):
+    """Ollama embedding provider."""
+
+    def __init__(self, model: str | None = None, host: str | None = None):
+        try:
+            from ollama import Client
+        except ImportError:
+            raise ImportError(
+                "Ollama embedder requires the [ollama] extra. "
+                "Install with: pip install fusesearch[ollama]"
+            ) from None
+
+        self.model = model or os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+        self.client = Client(host=host or os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+        # Probe to determine embedding dimension (varies by model)
+        probe = self.client.embed(model=self.model, input=["dimension probe"])
+        self._dimension = len(probe.embeddings[0])
+
+    @property
+    def name(self) -> str:
+        return "ollama"
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        response = self.client.embed(model=self.model, input=texts)
+        return [list(e) for e in response.embeddings]
+
+
 def create_embedder(provider: str | None = None) -> Embedder:
     """Create an embedder based on provider name or FUSESEARCH_EMBEDDER env var."""
     provider = provider or os.getenv("FUSESEARCH_EMBEDDER", "local")
@@ -88,4 +119,6 @@ def create_embedder(provider: str | None = None) -> Embedder:
         return OpenAIEmbedder()
     if provider == "local":
         return LocalEmbedder()
+    if provider == "ollama":
+        return OllamaEmbedder()
     raise ValueError(f"Unknown embedder provider: {provider}")

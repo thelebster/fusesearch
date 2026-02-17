@@ -37,15 +37,15 @@ Query → Embed → Vector Search  ─┐
 
 ## Embedding Providers
 
-FuseSearch supports two embedding providers. Each uses a separate Qdrant collection due to different vector dimensions.
+FuseSearch supports three embedding providers. Each uses a separate Qdrant collection due to different vector dimensions.
 
-| | Local (default) | OpenAI |
-|---|---|---|
-| **Model** | all-MiniLM-L6-v2 (384 dims) | text-embedding-3-small (1536 dims) |
-| **Quality** | Good for general English | Better for nuanced/complex queries |
-| **Cost** | Free | ~$0.02 per 1M tokens |
-| **Privacy** | Data stays local | Data sent to OpenAI |
-| **Offline** | Yes | No |
+| | Local (default) | OpenAI | Ollama |
+|---|---|---|---|
+| **Model** | all-MiniLM-L6-v2 (384 dims) | text-embedding-3-small (1536 dims) | nomic-embed-text (768 dims) |
+| **Quality** | Good for general English | Better for nuanced/complex queries | Good, varies by model |
+| **Cost** | Free | ~$0.02 per 1M tokens | Free |
+| **Privacy** | Data stays local | Data sent to OpenAI | Data stays local |
+| **Offline** | Yes | No | Yes |
 
 ### Local (default)
 
@@ -70,6 +70,30 @@ fusesearch --embedder openai search "your query"
 ```
 
 **Rate limits:** OpenAI Tier 1 accounts have a 40k tokens-per-minute limit on embeddings. FuseSearch retries automatically on rate limit errors, but initial indexing of large document sets will be slow. Higher tiers (auto-upgrade as you spend) increase this significantly. See [OpenAI rate limits](https://platform.openai.com/docs/guides/rate-limits).
+
+### Ollama
+
+Uses [Ollama](https://ollama.com/) to run embedding models locally. No API key needed.
+
+1. Install from [ollama.com](https://ollama.com/)
+2. Pull an embedding model: `ollama pull nomic-embed-text`
+
+```env
+FUSESEARCH_EMBEDDER=ollama
+```
+
+Or pass via CLI:
+
+```bash
+fusesearch --embedder ollama index data/docs
+fusesearch --embedder ollama search "your query"
+```
+
+Other Ollama embedding models: `bge-m3`, `mxbai-embed-large`, `snowflake-arctic-embed`. Configure with:
+
+```env
+OLLAMA_EMBED_MODEL=bge-m3
+```
 
 ## Reranking
 
