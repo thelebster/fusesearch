@@ -8,6 +8,7 @@ services:
         INSTALL_EXTRAS: all,dev
     volumes:
       - ./fusesearch:/app/fusesearch
+      - ./tests:/app/tests
 
   fusesearch-mcp:
     build:
@@ -15,3 +16,4 @@ services:
         INSTALL_EXTRAS: all,dev
     volumes:
       - ./fusesearch:/app/fusesearch
+      - ./tests:/app/tests

@@ -31,11 +31,13 @@ def synthesize(llm: LLM, query: str, results: list[dict]) -> dict:
 
     sources = []
     for i, result in enumerate(results, 1):
-        sources.append({
-            "index": i,
-            "title": result.get("title", "Untitled"),
-            "source_type": result.get("source_type", ""),
-            "heading_path": result.get("heading_path", []),
-        })
+        sources.append(
+            {
+                "index": i,
+                "title": result.get("title", "Untitled"),
+                "source_type": result.get("source_type", ""),
+                "heading_path": result.get("heading_path", []),
+            }
+        )
 
     return {"answer": answer, "sources": sources}

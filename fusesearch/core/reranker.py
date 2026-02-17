@@ -29,9 +29,7 @@ class Reranker(ABC):
 class LocalReranker(Reranker):
     """Cross-encoder reranker using sentence-transformers."""
 
-    def __init__(
-        self, model: str | None = None, local_files_only: bool = False
-    ):
+    def __init__(self, model: str | None = None, local_files_only: bool = False):
         try:
             from sentence_transformers import CrossEncoder
         except ImportError:
@@ -59,8 +57,7 @@ class LocalReranker(Reranker):
         scores = self.model.predict(pairs)
 
         scored = [
-            {**result, "score": float(score)}
-            for result, score in zip(results, scores)
+            {**result, "score": float(score)} for result, score in zip(results, scores)
         ]
         scored.sort(key=lambda x: x["score"], reverse=True)
 

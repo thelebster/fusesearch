@@ -16,7 +16,9 @@ class OllamaLLM(LLM):
             ) from None
 
         self.model = model
-        self.client = Client(host=host or os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+        self.client = Client(
+            host=host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        )
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         response = self.client.chat(

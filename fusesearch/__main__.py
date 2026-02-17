@@ -156,9 +156,13 @@ def main():
     )
 
     # Ask command
-    ask_parser = subparsers.add_parser("ask", help="Ask a question and get a synthesized answer")
+    ask_parser = subparsers.add_parser(
+        "ask", help="Ask a question and get a synthesized answer"
+    )
     ask_parser.add_argument("query", help="Question to ask")
-    ask_parser.add_argument("--limit", type=int, default=5, help="Number of results to use")
+    ask_parser.add_argument(
+        "--limit", type=int, default=5, help="Number of results to use"
+    )
     ask_parser.add_argument(
         "--no-hybrid",
         action="store_true",

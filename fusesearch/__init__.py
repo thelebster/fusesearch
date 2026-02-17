@@ -25,4 +25,5 @@ __all__ = [
     "create_llm",
     "create_reranker",
     "synthesize",
+    "__version__",
 ]

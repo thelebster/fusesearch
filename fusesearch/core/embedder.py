@@ -26,7 +26,9 @@ class Embedder(ABC):
 class OpenAIEmbedder(Embedder):
     """OpenAI embedding provider."""
 
-    def __init__(self, model: str = "text-embedding-3-small", api_key: str | None = None):
+    def __init__(
+        self, model: str = "text-embedding-3-small", api_key: str | None = None
+    ):
         try:
             from openai import OpenAI
         except ImportError:
@@ -94,7 +96,9 @@ class OllamaEmbedder(Embedder):
             ) from None
 
         self.model = model or os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-        self.client = Client(host=host or os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+        self.client = Client(
+            host=host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        )
         # Probe to determine embedding dimension (varies by model)
         probe = self.client.embed(model=self.model, input=["dimension probe"])
         self._dimension = len(probe.embeddings[0])

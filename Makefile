@@ -2,7 +2,7 @@
 export
 
 .PHONY: help \
-        build up start stop down restart logs status clean lint fmt \
+        build up start stop down restart logs status clean lint fmt tests \
         index search ask mcp \
         example-basic example-ask example-custom example-clean \
         package publish release
@@ -63,12 +63,27 @@ mcp:
 
 ## lint    : Run ruff linter and formatter check.
 lint:
-	docker compose run --rm fusesearch ruff check fusesearch/
-	docker compose run --rm fusesearch ruff format --check fusesearch/
+	docker compose run --rm --no-deps \
+		-v ./fusesearch:/app/fusesearch \
+		-v ./tests:/app/tests \
+		fusesearch ruff check fusesearch/ tests/
+	docker compose run --rm --no-deps \
+		-v ./fusesearch:/app/fusesearch \
+		-v ./tests:/app/tests \
+		fusesearch ruff format --check fusesearch/ tests/
+
+## tests   : Run tests.
+tests:
+	docker compose run --rm --no-deps \
+		-v ./tests:/app/tests \
+		fusesearch pytest
 
 ## fmt     : Auto-format code with ruff.
 fmt:
-	docker compose run --rm fusesearch ruff format fusesearch/
+	docker compose run --rm --no-deps \
+		-v ./fusesearch:/app/fusesearch \
+		-v ./tests:/app/tests \
+		fusesearch ruff format fusesearch/ tests/
 
 ## package : Build Python package (wheel + sdist) into dist/.
 package:
