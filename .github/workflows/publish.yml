@@ -20,6 +20,9 @@ jobs:
       - name: Install build tools
         run: pip install build
 
+      - name: Fix image paths for PyPI
+        run: sed -i -E 's|!\[([^]]*)\]\(docs/|![\1](https://raw.githubusercontent.com/thelebster/fusesearch/master/docs/|g' README.md
+
       - name: Build package
         run: python -m build
 

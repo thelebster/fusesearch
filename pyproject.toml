@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fusesearch"
-version = "0.2.0"
+version = "0.2.1"
 description = "Multi-source search aggregation tool with AI-powered retrieval and response synthesis"
 readme = "README.md"
 license = "MIT"
