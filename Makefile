@@ -4,10 +4,13 @@ export
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt \
         index search ask mcp \
+        example-basic example-ask example-custom example-clean \
         package publish release
 
+include examples/examples.mk
+
 ## help    : Print commands help.
-help : Makefile
+help : Makefile examples/examples.mk
 	@sed -n 's/^## *//p' $^ | tr -s '\t' ' ' | column -t -s ':'
 
 ## build   : Build Docker images.

@@ -1,0 +1,62 @@
+# Isolated environment for running examples.
+#
+# Usage:
+#   docker compose -f examples/docker-compose.yml run --rm basic_search
+#   docker compose -f examples/docker-compose.yml run --rm ask
+#   docker compose -f examples/docker-compose.yml run --rm custom_source
+#   docker compose -f examples/docker-compose.yml down -v   # cleanup
+
+x-example: &example
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  volumes:
+    - .:/app/examples
+    - models:/root/.cache/huggingface
+  environment:
+    QDRANT_HOST: qdrant
+    QDRANT_PORT: 6333
+    FUSESEARCH_COLLECTION: examples
+    TRANSFORMERS_VERBOSITY: error
+  depends_on:
+    qdrant:
+      condition: service_healthy
+
+services:
+  basic_search:
+    <<: *example
+    command: python examples/basic_search.py
+
+  ask:
+    <<: *example
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      FUSESEARCH_COLLECTION: examples
+      TRANSFORMERS_VERBOSITY: error
+      # Pass LLM API keys from host environment.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FUSESEARCH_LLM: ${FUSESEARCH_LLM:-}
+      OLLAMA_HOST: ${OLLAMA_HOST:-}
+    command: python examples/ask.py
+
+  custom_source:
+    <<: *example
+    command: python examples/custom_source.py
+
+  qdrant:
+    build:
+      context: ..
+      dockerfile: docker/qdrant.Dockerfile
+    volumes:
+      - qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  qdrant:
+  models:
