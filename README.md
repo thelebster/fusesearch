@@ -89,6 +89,12 @@ fusesearch --embedder ollama index data/docs
 fusesearch --embedder ollama search "your query"
 ```
 
+**Docker:** When running FuseSearch in Docker with Ollama on the host, set `OLLAMA_HOST` so the container can reach it:
+
+```env
+OLLAMA_HOST=http://host.docker.internal:11434
+```
+
 Other Ollama embedding models: `bge-m3`, `mxbai-embed-large`, `snowflake-arctic-embed`. Configure with:
 
 ```env
