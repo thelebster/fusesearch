@@ -3,7 +3,7 @@ export
 
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt tests \
-        index search ask mcp \
+        index index-confluence search ask mcp \
         example-basic example-ask example-custom example-clean \
         package publish release
 
@@ -43,6 +43,10 @@ status:
 ## index   : Index sample docs (run after 'make start').
 index:
 	docker compose exec fusesearch python -m fusesearch index /app/data/docs
+
+## index-confluence : Index from Confluence (run after 'make start', needs .env).
+index-confluence:
+	docker compose exec fusesearch python -m fusesearch index --source confluence
 
 ## search  : Search indexed docs. Usage: make search "your query"
 search:

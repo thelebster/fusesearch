@@ -8,6 +8,7 @@ def test_all_public_names_importable():
         QdrantStore,
         Reranker,
         SourceAdapter,
+        create_adapter,
         create_embedder,
         create_llm,
         create_reranker,
@@ -15,6 +16,7 @@ def test_all_public_names_importable():
     )
 
     # Verify they are the expected types
+    assert callable(create_adapter)
     assert callable(create_embedder)
     assert callable(create_llm)
     assert callable(create_reranker)

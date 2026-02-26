@@ -7,11 +7,16 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy project definition and install dependencies
+# Install dependencies
 COPY pyproject.toml .
-COPY fusesearch/ ./fusesearch/
+COPY fusesearch/__init__.py ./fusesearch/
 ARG INSTALL_EXTRAS=all
-RUN pip install --no-cache-dir ".[$INSTALL_EXTRAS]"
+RUN pip install --no-cache-dir --timeout=120 ".[$INSTALL_EXTRAS]"
+
+# Copy source code (PYTHONPATH ensures /app/fusesearch/ is found before
+# the stub package pip installed to site-packages during dependency resolution)
+COPY fusesearch/ ./fusesearch/
+ENV PYTHONPATH=/app
 
 # Create data directory
 RUN mkdir -p /app/data

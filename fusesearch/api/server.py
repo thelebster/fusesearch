@@ -7,7 +7,7 @@ from fusesearch import __version__
 from fusesearch.core.embedder import create_embedder
 from fusesearch.core.reranker import rerank_enabled
 from fusesearch.indexer import Indexer
-from fusesearch.sources.local_files import LocalFilesAdapter
+from fusesearch.sources import create_adapter
 from fusesearch.store.qdrant import QdrantStore
 
 app = FastAPI(title="FuseSearch", version=__version__)
@@ -56,7 +56,11 @@ class AskRequest(BaseModel):
 
 
 class IndexRequest(BaseModel):
-    paths: list[str]
+    source: str = "local_files"
+    source_config: dict = {}
+    since: str | None = None
+    debug_cache: bool = os.getenv("FUSESEARCH_DEBUG_CACHE", "false").lower() == "true"
+    cache_dir: str = os.getenv("FUSESEARCH_CACHE_DIR", "./data/cache")
 
 
 @app.get("/health")
@@ -107,7 +111,13 @@ def ask(req: AskRequest):
 
 @app.post("/index")
 def index(req: IndexRequest):
-    adapter = LocalFilesAdapter(directories=req.paths)
-    documents = list(adapter.fetch())
-    stats = indexer.index_documents(documents)
+    adapter = create_adapter(req.source, req.source_config)
+
+    if req.since:
+        documents = list(adapter.fetch_updated(since=req.since))
+    else:
+        documents = list(adapter.fetch())
+    cache_dir = req.cache_dir if req.debug_cache else None
+    idx = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
+    stats = idx.index_documents(documents)
     return {"documents_found": len(documents), **stats}

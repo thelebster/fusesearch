@@ -27,18 +27,36 @@ def cmd_serve(args):
     uvicorn.run("fusesearch.api.server:app", host=host, port=port)
 
 
+def _make_adapter(args):
+    """Create a source adapter based on CLI args."""
+    from fusesearch.sources import create_adapter
+
+    source = getattr(args, "source", "local_files")
+
+    if source == "confluence":
+        config = {"spaces": getattr(args, "spaces", None)}
+    else:
+        config = {"paths": args.paths}
+
+    return create_adapter(source, config)
+
+
 def cmd_index(args):
     from fusesearch.indexer import Indexer
-    from fusesearch.sources.local_files import LocalFilesAdapter
 
     embedder = _make_embedder(args.embedder)
     store = _make_store(embedder)
 
-    adapter = LocalFilesAdapter(directories=args.paths)
-    documents = list(adapter.fetch())
+    adapter = _make_adapter(args)
+    since = getattr(args, "since", None)
+    if since:
+        documents = list(adapter.fetch_updated(since=since))
+    else:
+        documents = list(adapter.fetch())
     print(f"Found {len(documents)} documents")
 
-    indexer = Indexer(store=store, embedder=embedder)
+    cache_dir = args.cache_dir if args.debug_cache else None
+    indexer = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
     stats = indexer.index_documents(documents)
     print(
         f"Indexed: {stats['new']} new, {stats['skipped']} skipped, {stats['deleted']} deleted"
@@ -131,10 +149,39 @@ def main():
     serve_parser.add_argument("--port", default=None, help="Port to bind to")
 
     # Index command
-    index_parser = subparsers.add_parser(
-        "index", help="Index documents from local files"
+    index_parser = subparsers.add_parser("index", help="Index documents from a source")
+    index_parser.add_argument(
+        "paths", nargs="*", default=[], help="Directories to index (for local_files)"
     )
-    index_parser.add_argument("paths", nargs="+", help="Directories to index")
+    index_parser.add_argument(
+        "--source",
+        choices=["local_files", "confluence"],
+        default="local_files",
+        help="Source adapter to use (default: local_files)",
+    )
+    index_parser.add_argument(
+        "--spaces",
+        nargs="*",
+        default=None,
+        help="Confluence spaces to index (default: all or CONFLUENCE_SPACES env var)",
+    )
+    index_parser.add_argument(
+        "--since",
+        default=None,
+        help="Only index documents updated since this ISO datetime (incremental sync)",
+    )
+    debug_cache_default = os.getenv("FUSESEARCH_DEBUG_CACHE", "false").lower() == "true"
+    index_parser.add_argument(
+        "--debug-cache",
+        action="store_true",
+        default=debug_cache_default,
+        help="Dump pre-chunking documents to disk (default: FUSESEARCH_DEBUG_CACHE env var)",
+    )
+    index_parser.add_argument(
+        "--cache-dir",
+        default=os.getenv("FUSESEARCH_CACHE_DIR", "./data/cache"),
+        help="Debug cache directory (default: FUSESEARCH_CACHE_DIR env var or ./data/cache)",
+    )
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search indexed documents")

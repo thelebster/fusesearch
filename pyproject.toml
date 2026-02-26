@@ -34,7 +34,7 @@ local = [
     "sentence-transformers>=5.2",
 ]
 openai = [
-    "openai>=1.0",
+    "openai>=2.0",
 ]
 anthropic = [
     "anthropic>=0.40",
@@ -42,8 +42,12 @@ anthropic = [
 ollama = [
     "ollama>=0.4",
 ]
+confluence = [
+    "atlassian-python-api>=4.0",
+    "markdownify>=1.2",
+]
 all = [
-    "fusesearch[mcp,local,openai,anthropic,ollama]",
+    "fusesearch[mcp,local,openai,anthropic,ollama,confluence]",
 ]
 dev = [
     "pytest>=9.0",

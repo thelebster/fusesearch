@@ -11,15 +11,25 @@ EMBED_BATCH_SIZE = 64
 class Indexer:
     """Indexes documents into the vector store."""
 
-    def __init__(self, store: QdrantStore, embedder: Embedder):
+    def __init__(
+        self, store: QdrantStore, embedder: Embedder, cache_dir: str | None = None
+    ):
         self.store = store
         self.embedder = embedder
+        self.cache_dir = cache_dir
 
     def index_documents(self, documents: list[Document]) -> dict:
         """Chunk, diff, embed, and store documents.
 
         Returns stats: total_chunks, new, skipped, deleted.
         """
+        # Debug cache: dump pre-chunking documents to disk
+        if self.cache_dir:
+            from fusesearch.core.debug_cache import dump_documents
+
+            n = dump_documents(documents, self.cache_dir)
+            print(f"Debug cache: wrote {n} files to {self.cache_dir}")
+
         # Chunk all documents
         all_chunks: list[Chunk] = []
         for doc in tqdm(documents, desc="Chunking", unit="doc"):
