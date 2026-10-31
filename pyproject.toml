@@ -27,6 +27,9 @@ dependencies = [
     "tqdm>=4.67",
 ]
 
+[project.scripts]
+fusesearch = "fusesearch.__main__:main"
+
 [project.optional-dependencies]
 mcp = [
     "mcp[cli]>=2.3,<3",
