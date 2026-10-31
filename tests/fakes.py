@@ -18,6 +18,7 @@ class FakeStore:
     """Point id -> chunk, scoped by ``chunk.source`` like the real store."""
 
     collection_name = "fake"
+    unscoped = 0  # chunks from 0.2.3 or earlier, for the upgrade warning
 
     def __init__(self):
         self.points = {}
@@ -43,7 +44,7 @@ class FakeStore:
         return len(self.get_existing_hashes(source))
 
     def count_unscoped(self):
-        return 0
+        return self.unscoped
 
     def search(self, query_vector, limit=5):
         return self._results(limit)

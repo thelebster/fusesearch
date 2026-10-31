@@ -1,3 +1,5 @@
+import sys
+
 from tqdm import tqdm
 
 from fusesearch.core.chunker import chunk_document
@@ -17,6 +19,25 @@ class Indexer:
         self.store = store
         self.embedder = embedder
         self.cache_dir = cache_dir
+        self._checked_unscoped = False
+
+    def _warn_unscoped_chunks(self):
+        """Chunks from fusesearch <= 0.2.3 have no source: they never match a
+        source-scoped diff, so they're never updated or deleted and show up as
+        duplicates next to the re-indexed ones. Warn once per Indexer."""
+        if self._checked_unscoped:
+            return
+        self._checked_unscoped = True
+        n = self.store.count_unscoped()
+        if n:
+            name = self.store.collection_name
+            print(
+                f"Warning: collection {name!r} has {n} chunks from FuseSearch 0.2.3 "
+                "or earlier (no source). They won't be updated or deleted and show up "
+                "as duplicates. Drop the collection and re-index:\n"
+                f"  curl -X DELETE http://<qdrant-host>:6333/collections/{name}",
+                file=sys.stderr,
+            )
 
     def index_documents(
         self,
@@ -38,6 +59,7 @@ class Indexer:
         Returns stats: source, total_chunks, new, skipped, deleted.
         """
         source = _resolve_source(documents, source)
+        self._warn_unscoped_chunks()
 
         # Debug cache: dump pre-chunking documents to disk
         if self.cache_dir:

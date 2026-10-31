@@ -94,18 +94,6 @@ def _resolve_sources(args, settings):
     raise UsageError("Nothing to index. Give paths, --source NAME, or --all." + hint)
 
 
-def _warn_unscoped_chunks(store):
-    """Chunks from fusesearch <= 0.2.x have no source and are never cleaned up."""
-    n = store.count_unscoped()
-    if n:
-        print(
-            f"Warning: collection {store.collection_name!r} has {n} chunks from an "
-            "older FuseSearch version (no source). They won't be updated or deleted "
-            "and show up as duplicates. Drop the collection and re-index:\n"
-            f"  curl -X DELETE http://<qdrant-host>:6333/collections/{store.collection_name}"
-        )
-
-
 def cmd_serve(args):
     import uvicorn
 
@@ -133,7 +121,6 @@ def cmd_index(args):
     debug_cache = _pick(args.debug_cache, settings.debug_cache_enabled)
     cache_dir = _pick(args.cache_dir, settings.debug_cache_dir) if debug_cache else None
     indexer = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
-    _warn_unscoped_chunks(store)
     if since:
         print(f"Incremental run (--since {since}): adding/updating only, no deletions")
 

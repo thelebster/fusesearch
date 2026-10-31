@@ -143,3 +143,18 @@ def test_get_existing_hashes_filters_by_source():
 
     store.get_existing_hashes()
     assert store.client.scroll.call_args.kwargs["scroll_filter"] is None
+
+
+def test_warns_once_about_chunks_from_older_versions(indexer, store, capsys):
+    store.unscoped = 7
+    indexer.index_documents([_doc("a.md", "Alpha text")], source="blog")
+    indexer.index_documents([_doc("b.md", "Beta text")], source="wiki")
+
+    err = capsys.readouterr().err
+    assert err.count("7 chunks from FuseSearch 0.2.3 or earlier") == 1
+    assert "collections/fake" in err
+
+
+def test_no_warning_without_old_chunks(indexer, capsys):
+    indexer.index_documents([_doc("a.md", "Alpha text")], source="blog")
+    assert "0.2.3" not in capsys.readouterr().err
