@@ -313,3 +313,15 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```
 
 Requires Node.js >= 18. `--allow-http` is required for plain HTTP (not needed for HTTPS).
+
+## Releasing
+
+FuseSearch can be published to PyPI in two ways. Use exactly one per version: PyPI never accepts the same version twice.
+
+1. Bump `version` in `pyproject.toml`, commit and push.
+2. Publish, either:
+   - **Via GitHub:** create a GitHub release `vX.Y.Z` (`make release`). The [publish workflow](.github/workflows/publish.yml) builds the package and uploads it to PyPI with trusted publishing; no token needed.
+   - **Manually, without GitHub:** set `PYPI_TOKEN` in `.env` and run `make publish`. It builds the package in Docker and uploads it with twine.
+3. Check the result: `pip install fusesearch==X.Y.Z`. PyPI can take a few minutes to list a new version.
+
+`make package` builds the wheel and sdist into `dist/` without uploading.
