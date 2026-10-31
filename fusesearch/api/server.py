@@ -124,5 +124,8 @@ def index(req: IndexRequest):
         documents = list(adapter.fetch())
     cache_dir = req.cache_dir if req.debug_cache else None
     idx = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
-    stats = idx.index_documents(documents)
+    # Named sources get their own namespace; ad-hoc requests share one per adapter type.
+    stats = idx.index_documents(
+        documents, source=req.source, incremental=bool(req.since)
+    )
     return {"documents_found": len(documents), **stats}

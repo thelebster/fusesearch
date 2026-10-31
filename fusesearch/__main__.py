@@ -86,6 +86,18 @@ def _resolve_adapters(args, settings):
     return []
 
 
+def _warn_unscoped_chunks(store):
+    """Chunks from fusesearch <= 0.2.x have no source and are never cleaned up."""
+    n = store.count_unscoped()
+    if n:
+        print(
+            f"Warning: collection {store.collection_name!r} has {n} chunks from an "
+            "older FuseSearch version (no source). They won't be updated or deleted "
+            "and show up as duplicates. Drop the collection and re-index:\n"
+            f"  curl -X DELETE http://<qdrant-host>:6333/collections/{store.collection_name}"
+        )
+
+
 def cmd_serve(args):
     import uvicorn
 
@@ -115,6 +127,9 @@ def cmd_index(args):
     since = getattr(args, "since", None)
     cache_dir = args.cache_dir if args.debug_cache else None
     indexer = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
+    _warn_unscoped_chunks(store)
+    if since:
+        print(f"Incremental run (--since {since}): adding/updating only, no deletions")
 
     total_docs = 0
     total_stats = {"new": 0, "skipped": 0, "deleted": 0}
@@ -129,7 +144,7 @@ def cmd_index(args):
             documents = list(adapter.fetch())
         print(f"Found {len(documents)} documents")
 
-        stats = indexer.index_documents(documents)
+        stats = indexer.index_documents(documents, source=name, incremental=bool(since))
         print(
             f"Indexed: {stats['new']} new, {stats['skipped']} skipped, "
             f"{stats['deleted']} deleted"

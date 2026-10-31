@@ -27,6 +27,10 @@ class Chunk(BaseModel):
     metadata: dict = Field(default_factory=dict)
     heading_path: list[str] = Field(default_factory=list)
     chunk_index: int = 0
+    # Index namespace the chunk belongs to: the config source name (e.g. "blog-posts")
+    # or the adapter type for ad-hoc indexing. Set by the Indexer; scopes diffing and
+    # deletion so indexing one source never touches another.
+    source: str = ""
 
     @computed_field
     @property

@@ -1,12 +1,16 @@
 import os
 import uuid
+from hashlib import sha256
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    IsEmptyCondition,
     MatchText,
+    MatchValue,
+    PayloadField,
     PayloadSchemaType,
     PointStruct,
     VectorParams,
@@ -18,6 +22,16 @@ from fusesearch.models import Chunk
 def hash_to_uuid(content_hash: str) -> str:
     """Convert a SHA-256 hex string to a UUID (uses first 32 hex chars)."""
     return str(uuid.UUID(content_hash[:32]))
+
+
+def point_id(source: str, content_hash: str) -> str:
+    """Point ID for a chunk: unique per (source, content), so the same text indexed
+    from two sources is stored twice and deleting it from one leaves the other."""
+    return hash_to_uuid(sha256(f"{source}\0{content_hash}".encode()).hexdigest())
+
+
+def _source_filter(source: str) -> Filter:
+    return Filter(must=[FieldCondition(key="source", match=MatchValue(value=source))])
 
 
 class QdrantStore:
@@ -49,25 +63,32 @@ class QdrantStore:
                     distance=Distance.COSINE,
                 ),
             )
-        self._ensure_text_index()
+        self._ensure_payload_indexes()
 
-    def _ensure_text_index(self):
-        """Create a full-text index on the content field for keyword search."""
-        collection_info = self.client.get_collection(self.collection_name)
-        if "content" not in (collection_info.payload_schema or {}):
-            self.client.create_payload_index(
-                collection_name=self.collection_name,
-                field_name="content",
-                field_schema=PayloadSchemaType.TEXT,
-            )
+    def _ensure_payload_indexes(self):
+        """Full-text index on content (keyword search), keyword index on source
+        (per-source diffing and deletion)."""
+        schema = self.client.get_collection(self.collection_name).payload_schema or {}
+        wanted = {
+            "content": PayloadSchemaType.TEXT,
+            "source": PayloadSchemaType.KEYWORD,
+        }
+        for field, field_schema in wanted.items():
+            if field not in schema:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name=field,
+                    field_schema=field_schema,
+                )
 
     def upsert(self, chunks: list[Chunk], embeddings: list[list[float]]):
         """Insert or update chunks with their embeddings."""
         points = [
             PointStruct(
-                id=hash_to_uuid(chunk.content_hash),
+                id=point_id(chunk.source, chunk.content_hash),
                 vector=embedding,
                 payload={
+                    "source": chunk.source,
                     "content": chunk.content,
                     "title": chunk.title,
                     "source_type": chunk.source_type,
@@ -95,6 +116,7 @@ class QdrantStore:
                 "score": point.score,
                 "content": point.payload["content"],
                 "title": point.payload["title"],
+                "source": point.payload.get("source"),
                 "source_type": point.payload["source_type"],
                 "heading_path": point.payload["heading_path"],
                 "metadata": point.payload["metadata"],
@@ -118,6 +140,7 @@ class QdrantStore:
                 "_id": point.id,
                 "content": point.payload["content"],
                 "title": point.payload["title"],
+                "source": point.payload.get("source"),
                 "source_type": point.payload["source_type"],
                 "heading_path": point.payload["heading_path"],
                 "metadata": point.payload["metadata"],
@@ -164,14 +187,18 @@ class QdrantStore:
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return [{**result_map[rid], "score": score} for rid, score in ranked]
 
-    def get_existing_hashes(self) -> set[str]:
-        """Get all content hashes currently in the store."""
+    def get_existing_hashes(self, source: str | None = None) -> set[str]:
+        """Get the point IDs currently in the store.
+
+        With ``source``, only points of that source; without, the whole collection.
+        """
         hashes = set()
         offset = None
         while True:
             result = self.client.scroll(
                 collection_name=self.collection_name,
-                limit=100,
+                scroll_filter=_source_filter(source) if source is not None else None,
+                limit=1000,
                 offset=offset,
                 with_payload=False,
                 with_vectors=False,
@@ -192,6 +219,22 @@ class QdrantStore:
             points_selector=list(hashes),
         )
 
-    def count(self) -> int:
-        """Return number of indexed chunks."""
-        return self.client.count(collection_name=self.collection_name).count
+    def count(self, source: str | None = None) -> int:
+        """Return number of indexed chunks, optionally for one source."""
+        return self.client.count(
+            collection_name=self.collection_name,
+            count_filter=_source_filter(source) if source is not None else None,
+        ).count
+
+    def count_unscoped(self) -> int:
+        """Chunks without a ``source`` field, written by fusesearch <= 0.2.x.
+
+        They are never diffed or deleted by source-scoped indexing, so they linger as
+        duplicates; drop the collection and re-index to get rid of them.
+        """
+        return self.client.count(
+            collection_name=self.collection_name,
+            count_filter=Filter(
+                must=[IsEmptyCondition(is_empty=PayloadField(key="source"))]
+            ),
+        ).count
