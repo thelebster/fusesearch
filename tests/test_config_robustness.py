@@ -6,6 +6,7 @@ import pytest
 
 from fusesearch import __main__ as cli
 from fusesearch.config import ConfigError, load_config, load_settings
+from tests.fakes import FakeEmbedder, FakeStore
 
 ENV_VARS = [
     "FUSESEARCH_CONFIG",
@@ -162,44 +163,13 @@ def test_index_all_binds_each_source_name(tmp_path, monkeypatch):
     assert created == ["docs", "wiki"]  # not ["wiki", "wiki"]
 
 
-class _FakeStore:
-    collection_name = "test"
-
-    def __init__(self):
-        self.ids = {}
-
-    def count_unscoped(self):
-        return 0
-
-    def count(self, source=None):
-        return len(self.ids)
-
-    def get_existing_hashes(self, source=None):
-        return {i for i, s in self.ids.items() if source in (None, s)}
-
-    def delete_by_hashes(self, ids):
-        for i in ids:
-            self.ids.pop(i, None)
-
-    def upsert(self, chunks, embeddings):
-        from fusesearch.store.qdrant import point_id
-
-        for c in chunks:
-            self.ids[point_id(c.source, c.content_hash)] = c.source
-
-
-class _FakeEmbedder:
-    def embed(self, texts):
-        return [[0.0] for _ in texts]
-
-
 def test_index_all_skips_broken_source_and_exits_nonzero(tmp_path, monkeypatch, capsys):
     docs = tmp_path / "docs"
     docs.mkdir()
     (docs / "a.md").write_text("# A\n\nSome text.\n")
     path = _write(tmp_path, TWO_SOURCES.format(docs=docs))
-    store = _FakeStore()
-    monkeypatch.setattr(cli, "_make_embedder", lambda *a, **k: _FakeEmbedder())
+    store = FakeStore()
+    monkeypatch.setattr(cli, "_make_embedder", lambda *a, **k: FakeEmbedder())
     monkeypatch.setattr(cli, "_make_store", lambda *a, **k: store)
 
     args = cli._build_parser().parse_args(["--config", path, "index", "--all"])
@@ -207,7 +177,7 @@ def test_index_all_skips_broken_source_and_exits_nonzero(tmp_path, monkeypatch, 
         cli.cmd_index(args)
 
     assert exc.value.code == 1
-    assert set(store.ids.values()) == {"docs"}  # docs indexed despite wiki failing
+    assert store.sources() == ["docs"]  # docs indexed despite wiki failing
     err = capsys.readouterr().err
     assert "Source 'wiki'" in err
     assert "(skipped)" in err

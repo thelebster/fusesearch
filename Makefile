@@ -83,16 +83,20 @@ lint:
 	docker compose run --rm --no-deps \
 		-v ./fusesearch:/app/fusesearch \
 		-v ./tests:/app/tests \
-		fusesearch ruff check fusesearch/ tests/
+		-v ./examples:/app/examples \
+		fusesearch ruff check fusesearch/ tests/ examples/
 	docker compose run --rm --no-deps \
 		-v ./fusesearch:/app/fusesearch \
 		-v ./tests:/app/tests \
-		fusesearch ruff format --check fusesearch/ tests/
+		-v ./examples:/app/examples \
+		fusesearch ruff format --check fusesearch/ tests/ examples/
 
-## tests   : Run tests.
+## tests   : Run tests (against the working tree, not the code baked into the image).
 tests:
 	docker compose run --rm --no-deps \
+		-v ./fusesearch:/app/fusesearch \
 		-v ./tests:/app/tests \
+		-v ./fusesearch.example.yaml:/app/fusesearch.example.yaml:ro \
 		fusesearch pytest
 
 ## fmt     : Auto-format code with ruff.
@@ -100,7 +104,8 @@ fmt:
 	docker compose run --rm --no-deps \
 		-v ./fusesearch:/app/fusesearch \
 		-v ./tests:/app/tests \
-		fusesearch ruff format fusesearch/ tests/
+		-v ./examples:/app/examples \
+		fusesearch ruff format fusesearch/ tests/ examples/
 
 ## package : Build Python package (wheel + sdist) into dist/.
 package:

@@ -1,9 +1,9 @@
-from fusesearch.core.chunker import chunk_document, _split_by_headings, _split_by_size
+from fusesearch.core.chunker import _split_by_headings, _split_by_size, chunk_document
 from fusesearch.models import Document
 
 
 def _make_doc(content, **kwargs):
-    defaults = dict(source_type="test", source_id="doc-1", title="Test Doc")
+    defaults = {"source_type": "test", "source_id": "doc-1", "title": "Test Doc"}
     defaults.update(kwargs)
     return Document(content=content, **defaults)
 
@@ -45,7 +45,7 @@ class TestSplitByHeadings:
         text = "# A\n\nA content\n\n## A1\n\nA1 content\n\n# B\n\nB content"
         sections = _split_by_headings(text)
         # B should reset the stack, not be under A
-        b_section = [s for s in sections if "B content" in s[1]][0]
+        b_section = next(s for s in sections if "B content" in s[1])
         assert b_section[0] == ["B"]
 
     def test_empty_section_skipped(self):
@@ -101,7 +101,7 @@ class TestChunkDocument:
     def test_heading_path_preserved(self):
         doc = _make_doc("# Top\n\n## Sub\n\nContent under sub.")
         chunks = chunk_document(doc)
-        sub_chunk = [c for c in chunks if "Content under sub" in c.content][0]
+        sub_chunk = next(c for c in chunks if "Content under sub" in c.content)
         assert sub_chunk.heading_path == ["Top", "Sub"]
 
     def test_chunk_index_increments(self):

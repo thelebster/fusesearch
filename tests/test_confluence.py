@@ -5,6 +5,20 @@ import pytest
 from fusesearch.sources.confluence import ConfluenceAdapter, _storage_to_markdown
 
 
+@pytest.fixture(autouse=True)
+def _no_confluence_env(monkeypatch):
+    """CONFLUENCE_* from a developer .env (passed into Docker) must not leak in."""
+    for name in (
+        "CONFLUENCE_URL",
+        "CONFLUENCE_USERNAME",
+        "CONFLUENCE_API_TOKEN",
+        "CONFLUENCE_PASSWORD",
+        "CONFLUENCE_SPACES",
+        "CONFLUENCE_CLOUD",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 class TestStorageToMarkdown:
     def test_basic_html(self):
         html = "<h1>Title</h1><p>Paragraph text.</p>"

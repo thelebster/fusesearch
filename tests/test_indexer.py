@@ -5,42 +5,7 @@ import pytest
 from fusesearch.indexer import Indexer
 from fusesearch.models import Document
 from fusesearch.store.qdrant import QdrantStore, point_id
-
-
-class FakeEmbedder:
-    dimension = 3
-    name = "fake"
-
-    def embed(self, texts):
-        return [[0.1, 0.2, 0.3] for _ in texts]
-
-
-class FakeStore:
-    """In-memory stand-in for QdrantStore: point id -> chunk."""
-
-    def __init__(self):
-        self.points = {}
-
-    def get_existing_hashes(self, source=None):
-        return {
-            pid
-            for pid, chunk in self.points.items()
-            if source is None or chunk.source == source
-        }
-
-    def delete_by_hashes(self, ids):
-        for pid in ids:
-            self.points.pop(pid, None)
-
-    def upsert(self, chunks, embeddings):
-        for chunk in chunks:
-            self.points[point_id(chunk.source, chunk.content_hash)] = chunk
-
-    def sources(self):
-        return sorted({c.source for c in self.points.values()})
-
-    def contents(self, source):
-        return sorted(c.content for c in self.points.values() if c.source == source)
+from tests.fakes import FakeEmbedder, FakeStore
 
 
 def _doc(source_id, content, source_type="local_files"):

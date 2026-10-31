@@ -37,7 +37,9 @@ print(f"Found {len(documents)} documents")
 # 4. Index: chunk, embed, and store
 indexer = Indexer(store=store, embedder=embedder)
 stats = indexer.index_documents(documents)
-print(f"Indexed: {stats['new']} new, {stats['skipped']} unchanged, {stats['deleted']} deleted")
+print(
+    f"Indexed: {stats['new']} new, {stats['skipped']} unchanged, {stats['deleted']} deleted"
+)
 print(f"Total chunks in store: {store.count()}")
 
 # 5. Search
