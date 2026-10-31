@@ -29,7 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = [
-    "mcp[cli]>=1.26",
+    "mcp[cli]>=2.3,<3",
 ]
 local = [
     "sentence-transformers>=5.2",

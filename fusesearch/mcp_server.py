@@ -1,28 +1,26 @@
+import threading
 from typing import Literal
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
+from fusesearch import __version__
 from fusesearch.config import load_settings
 
 _settings = load_settings()
 
-mcp = FastMCP(
+mcp = MCPServer(
     "FuseSearch",
+    version=__version__,
     instructions=(
         "FuseSearch is a knowledge base with indexed documents, blog posts, and notes. "
         "Use this server when the user asks factual questions, wants to look up a topic, "
         "or needs information that might exist in indexed sources."
     ),
-    host=_settings.mcp_host,
-    port=_settings.mcp_port,
-    # Stateless mode: each request is independent, no persistent sessions.
-    # Prevents 404 errors when clients reconnect after server restarts (e.g. Docker rebuild).
-    # Disable if you need server-to-client notifications or server-initiated sampling.
-    # https://gofastmcp.com/python-sdk/fastmcp-server-http
-    stateless_http=_settings.mcp_stateless,
 )
 
-# Lazy-initialized globals
+# Lazy-initialized globals. mcp 2.x runs sync tool handlers on worker threads,
+# so concurrent first calls must not load the model twice.
+_init_lock = threading.Lock()
 _embedder = None
 _store = None
 _reranker = None
@@ -32,34 +30,37 @@ RERANK_OVERFETCH = 3
 
 def _get_embedder():
     global _embedder
-    if _embedder is None:
-        from fusesearch.core.embedder import create_embedder
+    with _init_lock:
+        if _embedder is None:
+            from fusesearch.core.embedder import create_embedder
 
-        _embedder = create_embedder(_settings.embedder_provider)
+            _embedder = create_embedder(_settings.embedder_provider)
     return _embedder
 
 
 def _get_store():
     global _store
-    if _store is None:
-        from fusesearch.store.qdrant import QdrantStore
+    embedder = _get_embedder()
+    with _init_lock:
+        if _store is None:
+            from fusesearch.store.qdrant import QdrantStore
 
-        embedder = _get_embedder()
-        _store = QdrantStore(
-            host=_settings.qdrant_host,
-            port=_settings.qdrant_port,
-            dimension=embedder.dimension,
-            collection_suffix=embedder.name,
-        )
+            _store = QdrantStore(
+                host=_settings.qdrant_host,
+                port=_settings.qdrant_port,
+                dimension=embedder.dimension,
+                collection_suffix=embedder.name,
+            )
     return _store
 
 
 def _get_reranker():
     global _reranker
-    if _reranker is None:
-        from fusesearch.core.reranker import create_reranker
+    with _init_lock:
+        if _reranker is None:
+            from fusesearch.core.reranker import create_reranker
 
-        _reranker = create_reranker()
+            _reranker = create_reranker()
     return _reranker
 
 
@@ -124,7 +125,24 @@ Transport = Literal["stdio", "sse", "streamable-http"]
 
 
 def main(transport: Transport = "streamable-http"):
-    mcp.run(transport=transport)
+    if transport == "stdio":
+        # stdio takes no network options in mcp 2.x.
+        mcp.run(transport="stdio")
+    elif transport == "sse":
+        mcp.run(transport="sse", host=_settings.mcp_host, port=_settings.mcp_port)
+    else:
+        # mcp 2.x defaults host to 127.0.0.1, which is unreachable from outside
+        # a container, so always pass the configured host (default 0.0.0.0).
+        mcp.run(
+            transport="streamable-http",
+            host=_settings.mcp_host,
+            port=_settings.mcp_port,
+            # Stateless mode: each request is independent, no persistent sessions.
+            # Prevents 404 errors when clients reconnect after server restarts
+            # (e.g. Docker rebuild). Disable if you need server-to-client
+            # notifications or server-initiated sampling.
+            stateless_http=_settings.mcp_stateless,
+        )
 
 
 if __name__ == "__main__":
