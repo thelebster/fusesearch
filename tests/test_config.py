@@ -1,9 +1,10 @@
 import pytest
 
 from fusesearch.config import (
+    ConfluenceSource,
     FuseSearchConfig,
+    LocalFilesSource,
     ResolvedSettings,
-    SourceConfig,
     _interpolate_env,
     _interpolate_recursive,
     find_config_file,
@@ -107,12 +108,14 @@ class TestEnvVarOverrides:
 
 class TestSourceConfig:
     def test_local_files_source(self):
-        source = SourceConfig(type="local_files", paths=["/data/docs", "/data/blog"])
+        source = LocalFilesSource(
+            type="local_files", paths=["/data/docs", "/data/blog"]
+        )
         assert source.type == "local_files"
         assert source.paths == ["/data/docs", "/data/blog"]
 
     def test_confluence_source(self):
-        source = SourceConfig(
+        source = ConfluenceSource(
             type="confluence",
             url="https://myorg.atlassian.net/wiki",
             username="user@example.com",
@@ -127,8 +130,8 @@ class TestSourceConfig:
     def test_multiple_sources_in_config(self):
         config = FuseSearchConfig(
             sources={
-                "blog": SourceConfig(type="local_files", paths=["/data/blog"]),
-                "wiki": SourceConfig(
+                "blog": LocalFilesSource(type="local_files", paths=["/data/blog"]),
+                "wiki": ConfluenceSource(
                     type="confluence",
                     url="https://myorg.atlassian.net/wiki",
                     spaces=["DEV"],

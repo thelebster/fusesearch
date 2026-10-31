@@ -1,5 +1,8 @@
 import argparse
 import os
+import sys
+
+from fusesearch.config import ConfigError
 
 
 def _load_settings(args):
@@ -29,10 +32,18 @@ def _make_store(embedder, settings):
     return create_store(settings, embedder)
 
 
-def _resolve_adapters(args, settings):
-    """Determine which adapters to create based on CLI args and config.
+ADAPTER_TYPES = ("local_files", "confluence")
 
-    Returns list of (name, adapter) tuples.
+
+class UsageError(Exception):
+    """Bad command-line usage; printed without a traceback."""
+
+
+def _resolve_sources(args, settings):
+    """Which sources to index, from CLI args and config.
+
+    Returns (name, make_adapter) pairs. Adapters are created lazily, inside the
+    per-source loop, so one broken source doesn't stop the others with --all.
     """
     from fusesearch.sources import create_adapter
 
@@ -40,43 +51,47 @@ def _resolve_adapters(args, settings):
     paths = getattr(args, "paths", [])
     index_all = getattr(args, "all", False)
 
-    # 1. Legacy: positional paths provided
+    # 1. Legacy: positional paths
     if paths:
-        adapter = create_adapter("local_files", {"paths": paths})
-        return [("local_files", adapter)]
+        return [
+            ("local_files", lambda: create_adapter("local_files", {"paths": paths}))
+        ]
 
-    # 2. --source flag: named source from config or legacy type name
+    # 2. --source: named source from config, else an adapter type (legacy)
     if source_arg:
-        # Check if it's a named source in config
         if source_arg in settings.sources:
-            src = settings.sources[source_arg]
-            config_dict = src.model_dump(exclude_none=True)
-            adapter = create_adapter(src.type, config_dict)
-            return [(source_arg, adapter)]
-
-        # Fallback: treat as legacy type name (e.g. "confluence", "local_files")
+            return [(source_arg, lambda: settings.create_source_adapter(source_arg))]
         if source_arg == "confluence":
-            config = {"spaces": getattr(args, "spaces", None)}
-        else:
-            config = {"paths": paths}
-        adapter = create_adapter(source_arg, config)
-        return [(source_arg, adapter)]
+            spaces = getattr(args, "spaces", None)
+            return [
+                ("confluence", lambda: create_adapter("confluence", {"spaces": spaces}))
+            ]
+        if source_arg == "local_files":
+            raise UsageError(
+                "--source local_files needs paths: fusesearch index PATH..."
+            )
+        known = ", ".join(settings.sources) or "none"
+        raise UsageError(
+            f"Unknown source {source_arg!r}. Config sources: {known}. "
+            f"Adapter types: {', '.join(ADAPTER_TYPES)}."
+        )
 
-    # 3. --all flag or no args with config sources: index all sources from config
-    if index_all or settings.sources:
+    # 3. --all: every source in the config file
+    if index_all:
         if not settings.sources:
-            print("No sources defined in config file.")
-            return []
-        adapters = []
-        for name, src in settings.sources.items():
-            config_dict = src.model_dump(exclude_none=True)
-            adapter = create_adapter(src.type, config_dict)
-            adapters.append((name, adapter))
-        return adapters
+            raise UsageError(
+                "No sources defined in the config file (see fusesearch.example.yaml)."
+            )
+        return [
+            (name, lambda name=name: settings.create_source_adapter(name))
+            for name in settings.sources
+        ]
 
-    # 4. No config, no args — show help
-    print("No paths or sources specified. Use positional paths, --source, or --all.")
-    return []
+    # 4. Nothing given: don't guess (a full re-index can be slow and costly)
+    hint = (
+        f" Config sources: {', '.join(settings.sources)}." if settings.sources else ""
+    )
+    raise UsageError("Nothing to index. Give paths, --source NAME, or --all." + hint)
 
 
 def _warn_unscoped_chunks(store):
@@ -110,12 +125,9 @@ def cmd_index(args):
     from fusesearch.indexer import Indexer
 
     settings = _load_settings(args)
+    sources = _resolve_sources(args, settings)  # fail fast, before loading models
     embedder = _make_embedder(settings, args.embedder)
     store = _make_store(embedder, settings)
-
-    adapters = _resolve_adapters(args, settings)
-    if not adapters:
-        return
 
     since = getattr(args, "since", None)
     debug_cache = _pick(args.debug_cache, settings.debug_cache_enabled)
@@ -127,36 +139,55 @@ def cmd_index(args):
 
     total_docs = 0
     total_stats = {"new": 0, "skipped": 0, "deleted": 0}
+    failed = []
 
-    for name, adapter in adapters:
-        if len(adapters) > 1:
+    for name, make_adapter in sources:
+        if len(sources) > 1:
             print(f"\n--- Source: {name} ---")
 
-        if since:
-            documents = list(adapter.fetch_updated(since=since))
-        else:
-            documents = list(adapter.fetch())
-        print(f"Found {len(documents)} documents")
+        try:
+            adapter = make_adapter()
+            if since:
+                documents = list(adapter.fetch_updated(since=since))
+            else:
+                documents = list(adapter.fetch())
+            print(f"Found {len(documents)} documents")
+            stats = indexer.index_documents(
+                documents, source=name, incremental=bool(since)
+            )
+        except Exception as e:  # noqa: BLE001 - one broken source must not stop the others
+            sys.stdout.flush()  # keep stdout/stderr in order when piped
+            if isinstance(e, ConfigError):
+                message = f"{e} (skipped)"
+            else:
+                message = f"source {name!r} skipped: {type(e).__name__}: {e}"
+            print(f"Error: {message}", file=sys.stderr)
+            failed.append(name)
+            continue
 
-        stats = indexer.index_documents(documents, source=name, incremental=bool(since))
         print(
             f"Indexed: {stats['new']} new, {stats['skipped']} skipped, "
             f"{stats['deleted']} deleted"
         )
-
         total_docs += len(documents)
         for key in total_stats:
             total_stats[key] += stats[key]
 
-    if len(adapters) > 1:
+    if len(sources) > 1:
         print("\n--- Total ---")
-        print(f"Found {total_docs} documents across {len(adapters)} sources")
+        print(
+            f"Found {total_docs} documents across {len(sources) - len(failed)} sources"
+        )
         print(
             f"Indexed: {total_stats['new']} new, {total_stats['skipped']} skipped, "
             f"{total_stats['deleted']} deleted"
         )
 
     print(f"Total chunks in store: {store.count()}")
+    if failed:
+        sys.stdout.flush()
+        print(f"Failed sources: {', '.join(failed)}", file=sys.stderr)
+        sys.exit(1)
 
 
 RERANK_OVERFETCH = 3
@@ -199,8 +230,6 @@ def _run_search(store, embedder, query, limit, hybrid, rerank):
 
 
 def cmd_ask(args):
-    import sys
-
     from fusesearch.core.synthesizer import synthesize
     from fusesearch.llm import create_llm
 
@@ -350,7 +379,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main():
     args = _build_parser().parse_args()
+    try:
+        _dispatch(args)
+    except (ConfigError, UsageError, FileNotFoundError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
 
+
+def _dispatch(args):
     if args.command == "serve":
         cmd_serve(args)
     elif args.command == "index":

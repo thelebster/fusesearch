@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from fusesearch import __version__
-from fusesearch.config import load_settings
+from fusesearch.config import ConfigError, load_settings
 from fusesearch.core.embedder import create_embedder
 from fusesearch.indexer import Indexer
 from fusesearch.sources import create_adapter
@@ -104,13 +104,14 @@ def ask(req: AskRequest):
 
 @app.post("/index")
 def index(req: IndexRequest):
-    # Support named source from config file
-    if req.source in settings.sources and not req.source_config:
-        src = settings.sources[req.source]
-        source_config = src.model_dump(exclude_none=True)
-        adapter = create_adapter(src.type, source_config)
-    else:
-        adapter = create_adapter(req.source, req.source_config)
+    try:
+        # Named source from the config file, else an adapter type + source_config
+        if req.source in settings.sources and not req.source_config:
+            adapter = settings.create_source_adapter(req.source)
+        else:
+            adapter = create_adapter(req.source, req.source_config)
+    except (ConfigError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
     if req.since:
         documents = list(adapter.fetch_updated(since=req.since))

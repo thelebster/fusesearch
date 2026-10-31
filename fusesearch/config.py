@@ -7,9 +7,17 @@ Resolution order (highest wins): CLI args > env vars > config file > built-in de
 import os
 import re
 from pathlib import Path
+from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationError,
+    field_validator,
+)
 
 _ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
 
@@ -17,24 +25,35 @@ _ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
 _EMBED_MODEL_ENV = {"local": "FUSESEARCH_EMBED_MODEL", "ollama": "OLLAMA_EMBED_MODEL"}
 
 
-def _interpolate_env(value: str) -> str:
-    """Replace ${VAR_NAME} placeholders with environment variable values."""
+class ConfigError(Exception):
+    """Invalid config file, or a source that can't be used as configured."""
+
+
+def _interpolate_env(value: str, missing: set[str] | None = None) -> str:
+    """Replace ${VAR_NAME} placeholders with environment variable values.
+
+    Unset variables stay as written; their names are added to ``missing``.
+    """
 
     def _replace(match: re.Match) -> str:
         var_name = match.group(1)
-        return os.environ.get(var_name, match.group(0))
+        if var_name in os.environ:
+            return os.environ[var_name]
+        if missing is not None:
+            missing.add(var_name)
+        return match.group(0)
 
     return _ENV_VAR_RE.sub(_replace, value)
 
 
-def _interpolate_recursive(obj):
+def _interpolate_recursive(obj, missing: set[str] | None = None):
     """Walk nested dicts/lists, interpolating all string values."""
     if isinstance(obj, str):
-        return _interpolate_env(obj)
+        return _interpolate_env(obj, missing)
     if isinstance(obj, dict):
-        return {k: _interpolate_recursive(v) for k, v in obj.items()}
+        return {k: _interpolate_recursive(v, missing) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [_interpolate_recursive(item) for item in obj]
+        return [_interpolate_recursive(item, missing) for item in obj]
     return obj
 
 
@@ -47,44 +66,50 @@ def _none_to_empty(value):
     return {} if value is None else value
 
 
-class QdrantSettings(BaseModel):
+class _Strict(BaseModel):
+    """Unknown keys are errors, so a typo (``serach:``, ``space:``) isn't ignored."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QdrantSettings(_Strict):
     host: str = "localhost"
     port: int = 6333
     collection: str = "fusesearch"
 
 
-class EmbedderSettings(BaseModel):
+class EmbedderSettings(_Strict):
     provider: str = "local"
     # None = the provider's default model. Only applies while `provider` is in effect.
     model: str | None = None
 
 
-class SearchSettings(BaseModel):
+class SearchSettings(_Strict):
     hybrid: bool = True
     rerank: bool = False
 
 
-class LLMSettings(BaseModel):
+class LLMSettings(_Strict):
     provider: str | None = None
 
 
-class DebugCacheSettings(BaseModel):
+class DebugCacheSettings(_Strict):
     enabled: bool = False
     directory: str = "./data/cache"
 
 
-class APISettings(BaseModel):
+class APISettings(_Strict):
     host: str = "0.0.0.0"
     port: int = 8000
 
 
-class MCPSettings(BaseModel):
+class MCPSettings(_Strict):
     host: str = "0.0.0.0"
     port: int = 8001
     stateless: bool = True
 
 
-class Settings(BaseModel):
+class Settings(_Strict):
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
     embedder: EmbedderSettings = Field(default_factory=EmbedderSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
@@ -99,22 +124,39 @@ class Settings(BaseModel):
         return _none_to_empty(value)
 
 
-class SourceConfig(BaseModel):
-    """A single source definition. Flat model — type determines which fields are used."""
+class _SourceBase(_Strict):
+    # Env vars referenced as ${VAR} in this source but not set. Loading the config
+    # still works (an unused source must not break search); using it raises.
+    _missing_env: list[str] = PrivateAttr(default_factory=list)
 
-    type: str
-    # local_files
-    paths: list[str] = Field(default_factory=list)
-    # confluence
+    @property
+    def missing_env(self) -> list[str]:
+        return list(self._missing_env)
+
+
+class LocalFilesSource(_SourceBase):
+    type: Literal["local_files"]
+    paths: list[str] = Field(min_length=1)
+
+
+class ConfluenceSource(_SourceBase):
+    type: Literal["confluence"]
+    # None = fall back to the CONFLUENCE_* env vars (same as without a config file).
     url: str | None = None
     username: str | None = None
     api_token: str | None = None
     password: str | None = None
-    spaces: list[str] = Field(default_factory=list)
+    # None = CONFLUENCE_SPACES env var, else all spaces.
+    spaces: list[str] | None = None
     cloud: bool | None = None
 
 
-class FuseSearchConfig(BaseModel):
+SourceConfig = Annotated[
+    LocalFilesSource | ConfluenceSource, Field(discriminator="type")
+]
+
+
+class FuseSearchConfig(_Strict):
     """Top-level config: settings + named sources."""
 
     settings: Settings = Field(default_factory=Settings)
@@ -142,6 +184,20 @@ class ResolvedSettings:
     @property
     def sources(self) -> dict[str, SourceConfig]:
         return self._config.sources
+
+    def create_source_adapter(self, name: str):
+        """Adapter for the named config source.
+
+        Raises ConfigError if the source uses ${VAR}s that aren't set.
+        """
+        from fusesearch.sources import create_adapter
+
+        source = self._config.sources[name]
+        if source.missing_env:
+            raise ConfigError(
+                f"Source {name!r}: env var(s) not set: {', '.join(source.missing_env)}"
+            )
+        return create_adapter(source.type, source.model_dump(exclude_none=True))
 
     # --- Qdrant ---
 
@@ -289,12 +345,49 @@ def load_config(config_path: str | None = None) -> FuseSearchConfig:
     if path is None:
         return FuseSearchConfig()
 
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as e:
+        raise ConfigError(f"Config file {path} is not valid YAML:\n{e}") from None
     if not raw:
         return FuseSearchConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError(f"Config file {path}: expected a mapping at the top level")
+    raw = dict(raw)
 
-    interpolated = _interpolate_recursive(raw)
-    return FuseSearchConfig.model_validate(interpolated)
+    # settings: used on every run, so an unset ${VAR} is an error right away.
+    missing: set[str] = set()
+    if "settings" in raw:
+        raw["settings"] = _interpolate_recursive(raw["settings"], missing)
+    if missing:
+        raise ConfigError(
+            f"Config file {path}: env var(s) used in settings are not set: "
+            f"{', '.join(sorted(missing))}"
+        )
+
+    # sources: an unset ${VAR} only matters when that source is used.
+    missing_by_source: dict[str, list[str]] = {}
+    if isinstance(raw.get("sources"), dict):
+        sources = {}
+        for name, source in raw["sources"].items():
+            source_missing: set[str] = set()
+            sources[name] = _interpolate_recursive(source, source_missing)
+            if source_missing:
+                missing_by_source[name] = sorted(source_missing)
+        raw["sources"] = sources
+
+    try:
+        config = FuseSearchConfig.model_validate(raw)
+    except ValidationError as e:
+        problems = "\n".join(
+            f"  {'.'.join(str(p) for p in err['loc'])}: {err['msg']}"
+            for err in e.errors()
+        )
+        raise ConfigError(f"Config file {path} is invalid:\n{problems}") from None
+
+    for name, names in missing_by_source.items():
+        config.sources[name]._missing_env = names
+    return config
 
 
 def load_settings(config_path: str | None = None) -> ResolvedSettings:
