@@ -1,5 +1,6 @@
 # FuseSearch configuration file.
-# Copy to fusesearch.yaml and customize.
+# Copy to data/fusesearch.yaml (`make config`; seen by the Docker services) or to
+# fusesearch.yaml in your working directory, then customize. Both are gitignored.
 # Resolution order (highest wins): CLI args > env vars > config file > built-in defaults.
 
 settings:

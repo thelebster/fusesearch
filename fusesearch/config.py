@@ -310,8 +310,19 @@ class ResolvedSettings:
 # --- Config file discovery and loading ---
 
 
+# Auto-discovery, relative to the working directory. data/ is mounted into the
+# Docker containers (working dir /app) and gitignored, so a config with secrets
+# placed there is seen by every service and never committed.
+CONFIG_SEARCH_PATHS = (
+    Path("fusesearch.yaml"),
+    Path("fusesearch.yml"),
+    Path("data/fusesearch.yaml"),
+    Path("data/fusesearch.yml"),
+)
+
+
 def find_config_file(explicit_path: str | None = None) -> Path | None:
-    """Find config file: explicit path > FUSESEARCH_CONFIG env > auto-discover in CWD."""
+    """Find config file: explicit path > FUSESEARCH_CONFIG env > CONFIG_SEARCH_PATHS."""
     if explicit_path:
         path = Path(explicit_path)
         if path.is_file():
@@ -327,9 +338,7 @@ def find_config_file(explicit_path: str | None = None) -> Path | None:
             f"Config file from FUSESEARCH_CONFIG not found: {env_path}"
         )
 
-    # Auto-discover in current directory
-    for name in ("fusesearch.yaml", "fusesearch.yml"):
-        path = Path(name)
+    for path in CONFIG_SEARCH_PATHS:
         if path.is_file():
             return path
 

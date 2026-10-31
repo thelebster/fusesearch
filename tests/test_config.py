@@ -186,6 +186,26 @@ class TestConfigFileDiscovery:
         assert result is not None
         assert result.resolve() == config_file.resolve()
 
+    def test_auto_discover_in_data_dir(self, tmp_path, monkeypatch):
+        # Docker: ./data is mounted at /app/data and the working dir is /app.
+        monkeypatch.delenv("FUSESEARCH_CONFIG", raising=False)
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data").mkdir()
+        config_file = tmp_path / "data" / "fusesearch.yaml"
+        config_file.write_text("settings: {}")
+        result = find_config_file()
+        assert result is not None
+        assert result.resolve() == config_file.resolve()
+
+    def test_cwd_config_wins_over_data_dir(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("FUSESEARCH_CONFIG", raising=False)
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data").mkdir()
+        (tmp_path / "data" / "fusesearch.yaml").write_text("settings: {}")
+        cwd_file = tmp_path / "fusesearch.yaml"
+        cwd_file.write_text("settings: {}")
+        assert find_config_file().resolve() == cwd_file.resolve()
+
     def test_no_config_file_returns_none(self, tmp_path, monkeypatch):
         monkeypatch.delenv("FUSESEARCH_CONFIG", raising=False)
         monkeypatch.chdir(tmp_path)

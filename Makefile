@@ -3,7 +3,7 @@ export
 
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt tests \
-        index index-all index-source index-confluence search ask mcp \
+        config index index-all index-source index-confluence search ask mcp \
         example-basic example-ask example-custom example-multi-tenant example-clean \
         package publish release
 
@@ -43,6 +43,11 @@ status:
 ## index   : Index sample docs (run after 'make start').
 index:
 	docker compose exec fusesearch python -m fusesearch index /app/data/docs
+
+## config : Create data/fusesearch.yaml from the example (never overwrites).
+config:
+	@if [ -e data/fusesearch.yaml ]; then echo "data/fusesearch.yaml already exists, not touching it."; \
+	else mkdir -p data && cp fusesearch.example.yaml data/fusesearch.yaml && echo "Created data/fusesearch.yaml; edit it, then: make index-all"; fi
 
 ## index-all : Index all sources from config file.
 index-all:
