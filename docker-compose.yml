@@ -2,6 +2,10 @@ x-fusesearch: &fusesearch
   build:
     context: .
     dockerfile: docker/Dockerfile
+    args:
+      # No colon in "${VAR-default}": an explicit empty TORCH_INDEX_URL= skips the torch pre-install.
+      TORCH_INDEX_URL: ${TORCH_INDEX_URL-https://download.pytorch.org/whl/cpu}
+      INSTALL_EXTRAS: ${INSTALL_EXTRAS:-all}
   volumes:
     - ./data:/app/data
     - ./data/models:/root/.cache/huggingface

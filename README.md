@@ -27,6 +27,15 @@ make index    # index docs from data/docs
 make search "your query"
 ```
 
+### Docker build options
+
+The image installs the CPU-only build of PyTorch by default, a few hundred MB instead of several GB of CUDA libraries. Set these in `.env`, then run `make build`:
+
+| Variable | Default | Use |
+|---|---|---|
+| `TORCH_INDEX_URL` | `https://download.pytorch.org/whl/cpu` | A CUDA index from [pytorch.org](https://pytorch.org/get-started/locally/) for NVIDIA GPU hosts (the container also needs GPU access in `docker-compose.override.yml`). Empty value: skip the pre-install. |
+| `INSTALL_EXTRAS` | `all` | Package extras to install. For a slim image without torch (OpenAI or Ollama embeddings), use `mcp,openai,anthropic,ollama,confluence` with `TORCH_INDEX_URL=`. |
+
 ## How It Works
 
 ```

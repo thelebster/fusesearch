@@ -11,6 +11,8 @@ x-example: &example
   build:
     context: ..
     dockerfile: docker/Dockerfile
+    args:
+      TORCH_INDEX_URL: ${TORCH_INDEX_URL-https://download.pytorch.org/whl/cpu}
   volumes:
     - .:/app/examples
     - models:/root/.cache/huggingface
