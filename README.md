@@ -36,6 +36,66 @@ The image installs the CPU-only build of PyTorch by default, a few hundred MB in
 | `TORCH_INDEX_URL` | `https://download.pytorch.org/whl/cpu` | A CUDA index from [pytorch.org](https://pytorch.org/get-started/locally/) for NVIDIA GPU hosts (the container also needs GPU access in `docker-compose.override.yml`). Empty value: skip the pre-install. |
 | `INSTALL_EXTRAS` | `all` | Package extras to install. For a slim image without torch (OpenAI or Ollama embeddings), use `mcp,openai,anthropic,ollama,confluence` with `TORCH_INDEX_URL=`. |
 
+## Configuration File
+
+An optional `fusesearch.yaml` defines named sources and default settings:
+
+```bash
+make config                          # creates data/fusesearch.yaml from fusesearch.example.yaml
+make index-all                       # index every source in it
+make index-source source=blog-posts  # index one source
+```
+
+```yaml
+settings:
+  search:
+    rerank: true
+sources:
+  blog-posts:
+    type: local_files
+    paths: [/app/data/docs]
+  eng-wiki:
+    type: confluence
+    url: https://myorg.atlassian.net/wiki
+    username: user@example.com
+    api_token: ${CONFLUENCE_API_TOKEN}
+    spaces: [DEV, ENG]
+```
+
+See [`fusesearch.example.yaml`](fusesearch.example.yaml) for every setting.
+
+- **Location:** `--config PATH`, else `FUSESEARCH_CONFIG`, else `fusesearch.yaml`/`.yml` in the working directory, else `data/fusesearch.yaml`/`.yml`. The Docker services see `./data/fusesearch.yaml`. Both locations are gitignored.
+- **Precedence:** CLI flags > environment variables > config file > built-in defaults. For example, `search.hybrid: false` in the file, and `--hybrid` for a single search.
+- **Secrets:** `${VAR}` is replaced with the environment variable. If it isn't set, a value under `settings:` stops every command with an error, while a value in a source only fails that source when it's indexed. Search and the other sources keep working.
+- **Validation:** unknown keys are errors, so typos don't go unnoticed. `local_files` needs at least one path.
+
+### Indexing
+
+| Command | Indexes |
+|---|---|
+| `fusesearch index --all` | Every source in the config file. A failing source is skipped and the command exits with 1. |
+| `fusesearch index --source NAME` | One source from the config file |
+| `fusesearch index PATH...` | Local files, without a config file |
+| `fusesearch index --source confluence` | Confluence, from the `CONFLUENCE_*` environment variables |
+| `... --since 2026-01-01T00:00:00` | Only documents changed since then; nothing is deleted |
+
+Plain `fusesearch index` lists the config sources instead of guessing.
+
+Each source is synced on its own: re-indexing one source never deletes another source's chunks, and a sync that fetches 0 documents keeps the existing ones. Over REST: `POST /index` with `{"source": "blog-posts"}`.
+
+The REST API has no authentication, and `POST /index` also accepts an ad-hoc `source_config` (any path in the container, or Confluence with the server's credentials). Keep port 8000 private, for example with `BIND_ADDRESS=127.0.0.1` in `.env`.
+
+### Upgrading from 0.2.3 or earlier
+
+Chunk IDs now include the source name. Chunks indexed by 0.2.3 or earlier have none, so they are never updated or deleted, and `fusesearch index` warns about them. Drop the collection once and re-index:
+
+```bash
+curl -X DELETE http://localhost:6333/collections/fusesearch   # or fusesearch-openai, fusesearch-ollama
+make index-all
+```
+
+The MCP server now requires the MCP Python SDK 2.x, which the `[mcp]` extra installs.
+
 ## How It Works
 
 ```
@@ -130,7 +190,7 @@ curl -X POST http://localhost:8000/search \
   -d '{"query": "your query", "rerank": true}'
 ```
 
-Or enable globally via environment variable:
+Or enable it globally with an environment variable, or with `search.rerank: true` in the [config file](#configuration-file). `--no-rerank` turns it off for a single search:
 
 ```env
 FUSESEARCH_RERANK=true
