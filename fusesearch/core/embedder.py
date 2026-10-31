@@ -116,13 +116,16 @@ class OllamaEmbedder(Embedder):
         return [list(e) for e in response.embeddings]
 
 
-def create_embedder(provider: str | None = None) -> Embedder:
-    """Create an embedder based on provider name or FUSESEARCH_EMBEDDER env var."""
+def create_embedder(provider: str | None = None, model: str | None = None) -> Embedder:
+    """Create an embedder based on provider name or FUSESEARCH_EMBEDDER env var.
+
+    ``model`` overrides the provider's default model (None keeps the default).
+    """
     provider = provider or os.getenv("FUSESEARCH_EMBEDDER", "local")
     if provider == "openai":
-        return OpenAIEmbedder()
+        return OpenAIEmbedder(model=model) if model else OpenAIEmbedder()
     if provider == "local":
-        return LocalEmbedder()
+        return LocalEmbedder(model=model)
     if provider == "ollama":
-        return OllamaEmbedder()
+        return OllamaEmbedder(model=model)
     raise ValueError(f"Unknown embedder provider: {provider}")

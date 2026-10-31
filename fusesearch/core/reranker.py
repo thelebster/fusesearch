@@ -66,11 +66,6 @@ class LocalReranker(Reranker):
         return scored
 
 
-def rerank_enabled() -> bool:
-    """Check if reranking is enabled globally via FUSESEARCH_RERANK env var."""
-    return os.getenv("FUSESEARCH_RERANK", "false").lower() == "true"
-
-
 def create_reranker(provider: str | None = None) -> Reranker:
     """Create a reranker based on provider name or FUSESEARCH_RERANKER env var."""
     provider = provider or os.getenv("FUSESEARCH_RERANKER", "local")

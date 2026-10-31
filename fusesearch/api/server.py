@@ -4,23 +4,17 @@ from pydantic import BaseModel
 from fusesearch import __version__
 from fusesearch.config import load_settings
 from fusesearch.core.embedder import create_embedder
-from fusesearch.core.reranker import rerank_enabled
 from fusesearch.indexer import Indexer
 from fusesearch.sources import create_adapter
-from fusesearch.store.qdrant import QdrantStore
+from fusesearch.store.qdrant import create_store
 
 settings = load_settings()
 
 app = FastAPI(title="FuseSearch", version=__version__)
 
-embedder = create_embedder(settings.embedder_provider)
+embedder = create_embedder(settings.embedder_provider, model=settings.embedder_model)
 
-store = QdrantStore(
-    host=settings.qdrant_host,
-    port=settings.qdrant_port,
-    dimension=embedder.dimension,
-    collection_suffix=embedder.name,
-)
+store = create_store(settings, embedder)
 indexer = Indexer(store=store, embedder=embedder)
 
 # Lazy-initialized reranker (only loaded when first rerank request arrives)
@@ -42,7 +36,7 @@ class SearchRequest(BaseModel):
     query: str
     limit: int = 5
     hybrid: bool = settings.hybrid
-    rerank: bool = rerank_enabled()
+    rerank: bool = settings.rerank
     vector_weight: float = 0.7
 
 
@@ -50,7 +44,7 @@ class AskRequest(BaseModel):
     query: str
     limit: int = 5
     hybrid: bool = settings.hybrid
-    rerank: bool = rerank_enabled()
+    rerank: bool = settings.rerank
     vector_weight: float = 0.7
 
 
@@ -101,7 +95,7 @@ def ask(req: AskRequest):
         results = reranker.rerank(req.query, results, limit=req.limit)
 
     try:
-        llm = create_llm()
+        llm = create_llm(settings.llm_provider)
     except ImportError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 

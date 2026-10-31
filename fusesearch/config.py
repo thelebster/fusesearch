@@ -9,9 +9,12 @@ import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 _ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
+
+# Per-provider env vars for the embedding model (names predate the config file).
+_EMBED_MODEL_ENV = {"local": "FUSESEARCH_EMBED_MODEL", "ollama": "OLLAMA_EMBED_MODEL"}
 
 
 def _interpolate_env(value: str) -> str:
@@ -38,6 +41,12 @@ def _interpolate_recursive(obj):
 # --- Pydantic settings models ---
 
 
+def _none_to_empty(value):
+    """An empty YAML section (``llm:`` with only comments below) loads as None;
+    treat it like an empty mapping so the section's defaults apply."""
+    return {} if value is None else value
+
+
 class QdrantSettings(BaseModel):
     host: str = "localhost"
     port: int = 6333
@@ -46,7 +55,8 @@ class QdrantSettings(BaseModel):
 
 class EmbedderSettings(BaseModel):
     provider: str = "local"
-    model: str = "all-MiniLM-L6-v2"
+    # None = the provider's default model. Only applies while `provider` is in effect.
+    model: str | None = None
 
 
 class SearchSettings(BaseModel):
@@ -83,6 +93,11 @@ class Settings(BaseModel):
     api: APISettings = Field(default_factory=APISettings)
     mcp: MCPSettings = Field(default_factory=MCPSettings)
 
+    @field_validator("*", mode="before")
+    @classmethod
+    def _empty_sections(cls, value):
+        return _none_to_empty(value)
+
 
 class SourceConfig(BaseModel):
     """A single source definition. Flat model — type determines which fields are used."""
@@ -104,6 +119,11 @@ class FuseSearchConfig(BaseModel):
 
     settings: Settings = Field(default_factory=Settings)
     sources: dict[str, SourceConfig] = Field(default_factory=dict)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _empty_sections(cls, value):
+        return _none_to_empty(value)
 
 
 # --- ResolvedSettings: merges config file + env vars ---
@@ -136,7 +156,11 @@ class ResolvedSettings:
 
     @property
     def qdrant_collection(self) -> str:
-        return os.getenv("QDRANT_COLLECTION") or self._config.settings.qdrant.collection
+        """Base collection name; the store appends the embedder name (except local)."""
+        return (
+            os.getenv("FUSESEARCH_COLLECTION")
+            or self._config.settings.qdrant.collection
+        )
 
     # --- Embedder ---
 
@@ -147,11 +171,17 @@ class ResolvedSettings:
         )
 
     @property
-    def embedder_model(self) -> str:
-        return (
-            os.getenv("FUSESEARCH_EMBEDDER_MODEL")
-            or self._config.settings.embedder.model
-        )
+    def embedder_model(self) -> str | None:
+        return self.embedder_model_for(self.embedder_provider)
+
+    def embedder_model_for(self, provider: str) -> str | None:
+        """Model for ``provider``: its env var, else the config model if the config
+        was written for this provider, else None (provider default)."""
+        env_name = _EMBED_MODEL_ENV.get(provider)
+        if env_name and os.getenv(env_name):
+            return os.getenv(env_name)
+        embedder = self._config.settings.embedder
+        return embedder.model if provider == embedder.provider else None
 
     # --- Search ---
 

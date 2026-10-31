@@ -10,30 +10,23 @@ def _load_settings(args):
     return load_settings(config_path)
 
 
-def _make_embedder(settings=None, provider: str | None = None):
+def _pick(cli_value, setting):
+    """CLI value if the flag was given, else the resolved setting (env > config)."""
+    return setting if cli_value is None else cli_value
+
+
+def _make_embedder(settings, provider: str | None = None):
+    """Embedder for --embedder (if given) or the configured provider."""
     from fusesearch.core.embedder import create_embedder
 
-    if provider is None and settings is not None:
-        provider = settings.embedder_provider
-    return create_embedder(provider)
+    provider = provider or settings.embedder_provider
+    return create_embedder(provider, model=settings.embedder_model_for(provider))
 
 
-def _make_store(embedder, settings=None):
-    from fusesearch.store.qdrant import QdrantStore
+def _make_store(embedder, settings):
+    from fusesearch.store.qdrant import create_store
 
-    if settings is not None:
-        host = settings.qdrant_host
-        port = settings.qdrant_port
-    else:
-        host = os.getenv("QDRANT_HOST", "localhost")
-        port = int(os.getenv("QDRANT_PORT", "6333"))
-
-    return QdrantStore(
-        host=host,
-        port=port,
-        dimension=embedder.dimension,
-        collection_suffix=embedder.name,
-    )
+    return create_store(settings, embedder)
 
 
 def _resolve_adapters(args, settings):
@@ -125,7 +118,8 @@ def cmd_index(args):
         return
 
     since = getattr(args, "since", None)
-    cache_dir = args.cache_dir if args.debug_cache else None
+    debug_cache = _pick(args.debug_cache, settings.debug_cache_enabled)
+    cache_dir = _pick(args.cache_dir, settings.debug_cache_dir) if debug_cache else None
     indexer = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
     _warn_unscoped_chunks(store)
     if since:
@@ -172,12 +166,13 @@ def cmd_search(args):
     settings = _load_settings(args)
     embedder = _make_embedder(settings, args.embedder)
     store = _make_store(embedder, settings)
-    hybrid = not args.no_hybrid
+    hybrid = _pick(args.hybrid, settings.hybrid)
+    rerank = _pick(args.rerank, settings.rerank)
 
-    results = _run_search(store, embedder, args.query, args.limit, hybrid, args.rerank)
+    results = _run_search(store, embedder, args.query, args.limit, hybrid, rerank)
 
     mode = "hybrid" if hybrid else "vector-only"
-    rerank_label = " + rerank" if args.rerank else ""
+    rerank_label = " + rerank" if rerank else ""
     print(f"Search mode: {mode}{rerank_label}")
     for i, result in enumerate(results, 1):
         print(f"\n--- Result {i} (score: {result['score']:.4f}) ---")
@@ -212,12 +207,13 @@ def cmd_ask(args):
     settings = _load_settings(args)
     embedder = _make_embedder(settings, args.embedder)
     store = _make_store(embedder, settings)
-    hybrid = not args.no_hybrid
+    hybrid = _pick(args.hybrid, settings.hybrid)
+    rerank = _pick(args.rerank, settings.rerank)
 
-    results = _run_search(store, embedder, args.query, args.limit, hybrid, args.rerank)
+    results = _run_search(store, embedder, args.query, args.limit, hybrid, rerank)
 
     try:
-        llm = create_llm(args.llm)
+        llm = create_llm(args.llm or settings.llm_provider)
     except ImportError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -234,7 +230,26 @@ def cmd_ask(args):
             print(f"  [{source['index']}] {source['title']}{heading}")
 
 
-def main():
+def _add_search_flags(parser):
+    """--hybrid/--no-hybrid and --rerank/--no-rerank. Default None: resolved after
+    loading settings, so CLI > env > config file > built-in default."""
+    parser.add_argument(
+        "--hybrid",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Hybrid vector + keyword search "
+        "(default: FUSESEARCH_HYBRID, config search.hybrid, or on)",
+    )
+    parser.add_argument(
+        "--rerank",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Rerank results with cross-encoder "
+        "(default: FUSESEARCH_RERANK, config search.rerank, or off)",
+    )
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fusesearch", description="FuseSearch - multi-source search"
     )
@@ -247,7 +262,8 @@ def main():
         "--embedder",
         choices=["local", "openai", "ollama"],
         default=None,
-        help="Embedding provider (default: FUSESEARCH_EMBEDDER env var or 'local')",
+        help="Embedding provider "
+        "(default: FUSESEARCH_EMBEDDER, config embedder.provider, or 'local')",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -284,37 +300,25 @@ def main():
         default=None,
         help="Only index documents updated since this ISO datetime (incremental sync)",
     )
-    debug_cache_default = os.getenv("FUSESEARCH_DEBUG_CACHE", "false").lower() == "true"
     index_parser.add_argument(
         "--debug-cache",
-        action="store_true",
-        default=debug_cache_default,
-        help="Dump pre-chunking documents to disk (default: FUSESEARCH_DEBUG_CACHE env var)",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Dump pre-chunking documents to disk "
+        "(default: FUSESEARCH_DEBUG_CACHE, config debug_cache.enabled, or off)",
     )
     index_parser.add_argument(
         "--cache-dir",
-        default=os.getenv("FUSESEARCH_CACHE_DIR", "./data/cache"),
-        help="Debug cache directory (default: FUSESEARCH_CACHE_DIR env var or ./data/cache)",
+        default=None,
+        help="Debug cache directory "
+        "(default: FUSESEARCH_CACHE_DIR, config debug_cache.directory, or ./data/cache)",
     )
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search indexed documents")
     search_parser.add_argument("query", help="Search query")
     search_parser.add_argument("--limit", type=int, default=5, help="Number of results")
-    hybrid_default = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
-    search_parser.add_argument(
-        "--no-hybrid",
-        action="store_true",
-        default=not hybrid_default,
-        help="Disable hybrid search (default: FUSESEARCH_HYBRID env var)",
-    )
-    rerank_default = os.getenv("FUSESEARCH_RERANK", "false").lower() == "true"
-    search_parser.add_argument(
-        "--rerank",
-        action="store_true",
-        default=rerank_default,
-        help="Rerank results with cross-encoder (default: FUSESEARCH_RERANK env var)",
-    )
+    _add_search_flags(search_parser)
 
     # Ask command
     ask_parser = subparsers.add_parser(
@@ -324,23 +328,13 @@ def main():
     ask_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to use"
     )
-    ask_parser.add_argument(
-        "--no-hybrid",
-        action="store_true",
-        default=not hybrid_default,
-        help="Disable hybrid search (default: FUSESEARCH_HYBRID env var)",
-    )
-    ask_parser.add_argument(
-        "--rerank",
-        action="store_true",
-        default=rerank_default,
-        help="Rerank results with cross-encoder (default: FUSESEARCH_RERANK env var)",
-    )
+    _add_search_flags(ask_parser)
     ask_parser.add_argument(
         "--llm",
         choices=["anthropic", "openai", "ollama"],
         default=None,
-        help="LLM provider (default: FUSESEARCH_LLM env var or 'anthropic')",
+        help="LLM provider (default: FUSESEARCH_LLM, config llm.provider, "
+        "or the first installed provider)",
     )
 
     # MCP server command
@@ -351,8 +345,11 @@ def main():
         default="stdio",
         help="Transport type",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def main():
+    args = _build_parser().parse_args()
 
     if args.command == "serve":
         cmd_serve(args)
@@ -372,7 +369,7 @@ def main():
 
         mcp_main(transport=args.transport)
     else:
-        cmd_serve(argparse.Namespace(host=None, port=None, config=None))
+        cmd_serve(argparse.Namespace(host=None, port=None, config=args.config))
 
 
 if __name__ == "__main__":

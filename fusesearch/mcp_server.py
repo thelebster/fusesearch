@@ -34,7 +34,9 @@ def _get_embedder():
         if _embedder is None:
             from fusesearch.core.embedder import create_embedder
 
-            _embedder = create_embedder(_settings.embedder_provider)
+            _embedder = create_embedder(
+                _settings.embedder_provider, model=_settings.embedder_model
+            )
     return _embedder
 
 
@@ -43,14 +45,9 @@ def _get_store():
     embedder = _get_embedder()
     with _init_lock:
         if _store is None:
-            from fusesearch.store.qdrant import QdrantStore
+            from fusesearch.store.qdrant import create_store
 
-            _store = QdrantStore(
-                host=_settings.qdrant_host,
-                port=_settings.qdrant_port,
-                dimension=embedder.dimension,
-                collection_suffix=embedder.name,
-            )
+            _store = create_store(_settings, embedder)
     return _store
 
 

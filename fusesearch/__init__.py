@@ -30,6 +30,7 @@ __all__ = [
     "QdrantStore",
     "Reranker",
     "SourceAdapter",
+    "__version__",
     "create_adapter",
     "create_embedder",
     "create_llm",
@@ -37,5 +38,4 @@ __all__ = [
     "load_config",
     "load_settings",
     "synthesize",
-    "__version__",
 ]

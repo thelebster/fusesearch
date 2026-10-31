@@ -7,12 +7,12 @@ settings:
   qdrant:
     host: qdrant
     port: 6333
-    collection: fusesearch
+    collection: fusesearch               # base name; non-local embedders add a suffix (fusesearch-openai)
 
   # Embedding provider and model.
   embedder:
     provider: local                    # local, openai, or ollama
-    model: all-MiniLM-L6-v2
+    # model: all-MiniLM-L6-v2          # default: the provider's own; only used with this provider
 
   # Search defaults.
   search:
@@ -21,7 +21,7 @@ settings:
 
   # LLM provider for the "ask" command.
   llm:
-    provider: anthropic                # anthropic, openai, or ollama
+    # provider: anthropic              # anthropic, openai, or ollama; default: first installed
 
   # Debug cache: dump pre-chunking documents to disk for inspection.
   debug_cache:

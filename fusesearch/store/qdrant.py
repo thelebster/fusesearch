@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import os
 import uuid
 from hashlib import sha256
+from typing import TYPE_CHECKING
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -18,6 +21,10 @@ from qdrant_client.models import (
 
 from fusesearch.models import Chunk
 
+if TYPE_CHECKING:
+    from fusesearch.config import ResolvedSettings
+    from fusesearch.core.embedder import Embedder
+
 
 def hash_to_uuid(content_hash: str) -> str:
     """Convert a SHA-256 hex string to a UUID (uses first 32 hex chars)."""
@@ -32,6 +39,24 @@ def point_id(source: str, content_hash: str) -> str:
 
 def _source_filter(source: str) -> Filter:
     return Filter(must=[FieldCondition(key="source", match=MatchValue(value=source))])
+
+
+def collection_name(base: str, embedder_name: str | None) -> str:
+    """Collection per embedder (vector sizes differ): ``base`` for the local
+    embedder, ``base-<embedder>`` otherwise."""
+    if embedder_name and embedder_name != "local":
+        return f"{base}-{embedder_name}"
+    return base
+
+
+def create_store(settings: ResolvedSettings, embedder: Embedder) -> QdrantStore:
+    """Store for the CLI, API and MCP server, from resolved settings."""
+    return QdrantStore(
+        host=settings.qdrant_host,
+        port=settings.qdrant_port,
+        dimension=embedder.dimension,
+        collection=collection_name(settings.qdrant_collection, embedder.name),
+    )
 
 
 class QdrantStore:
@@ -50,10 +75,7 @@ class QdrantStore:
             self.collection_name = collection
         else:
             base = os.getenv("FUSESEARCH_COLLECTION", "fusesearch")
-            if collection_suffix and collection_suffix != "local":
-                self.collection_name = f"{base}-{collection_suffix}"
-            else:
-                self.collection_name = base
+            self.collection_name = collection_name(base, collection_suffix)
         self.dimension = dimension
         self._ensure_collection()
 
