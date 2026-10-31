@@ -1,6 +1,6 @@
 # FuseSearch
 
-[![PyPI](https://img.shields.io/pypi/v/fusesearch)](https://pypi.org/project/fusesearch/)
+[![PyPI](https://img.shields.io/pypi/v/fusesearch?cacheSeconds=3600)](https://pypi.org/project/fusesearch/)
 
 Multi-source search aggregation tool that unifies retrieval across diverse data sources — Confluence, MCP servers, local files, and more — using AI-powered search and response synthesis through a single query interface.
 
