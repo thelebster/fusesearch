@@ -4,7 +4,7 @@ export
 .PHONY: help \
         build up start stop down restart logs status clean lint fmt tests \
         index index-all index-source index-confluence search ask mcp \
-        example-basic example-ask example-custom example-clean \
+        example-basic example-ask example-custom example-multi-tenant example-clean \
         package publish release
 
 include examples/examples.mk

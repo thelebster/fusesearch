@@ -4,6 +4,7 @@
 #   docker compose -f examples/docker-compose.yml run --rm basic_search
 #   docker compose -f examples/docker-compose.yml run --rm ask
 #   docker compose -f examples/docker-compose.yml run --rm custom_source
+#   docker compose -f examples/docker-compose.yml run --rm multi_tenant
 #   docker compose -f examples/docker-compose.yml down -v   # cleanup
 
 x-example: &example
@@ -44,6 +45,10 @@ services:
   custom_source:
     <<: *example
     command: python examples/custom_source.py
+
+  multi_tenant:
+    <<: *example
+    command: python examples/multi_tenant.py
 
   qdrant:
     build:

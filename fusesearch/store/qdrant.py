@@ -43,13 +43,17 @@ class QdrantStore:
         port: int = 6333,
         dimension: int = 384,
         collection_suffix: str | None = None,
+        collection: str | None = None,
     ):
         self.client = QdrantClient(host=host, port=port)
-        base = os.getenv("FUSESEARCH_COLLECTION", "fusesearch")
-        if collection_suffix and collection_suffix != "local":
-            self.collection_name = f"{base}-{collection_suffix}"
+        if collection:
+            self.collection_name = collection
         else:
-            self.collection_name = base
+            base = os.getenv("FUSESEARCH_COLLECTION", "fusesearch")
+            if collection_suffix and collection_suffix != "local":
+                self.collection_name = f"{base}-{collection_suffix}"
+            else:
+                self.collection_name = base
         self.dimension = dimension
         self._ensure_collection()
 

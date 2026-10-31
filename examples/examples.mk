@@ -12,6 +12,10 @@ example-ask:
 example-custom:
 	$(EXAMPLES_COMPOSE) run --rm custom_source
 
+## example-multi-tenant : Run multi_tenant example (isolated Qdrant).
+example-multi-tenant:
+	$(EXAMPLES_COMPOSE) run --rm multi_tenant
+
 ## example-clean  : Remove example containers and volumes.
 example-clean:
 	$(EXAMPLES_COMPOSE) down -v
