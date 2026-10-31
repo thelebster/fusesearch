@@ -87,14 +87,25 @@ The REST API has no authentication, and `POST /index` also accepts an ad-hoc `so
 
 ### Upgrading from 0.2.3 or earlier
 
-Chunk IDs now include the source name. Chunks indexed by 0.2.3 or earlier have none, so they are never updated or deleted, and `fusesearch index` warns about them. Drop the collection once and re-index:
+Chunk IDs now include the source name, and the bundled Qdrant server moves from 1.16 to 1.20. The index has to be rebuilt once. Nothing is lost by that, because every source keeps its own data.
+
+With the Docker setup, delete the Qdrant storage itself, not just the collection. Qdrant can't skip minor versions on existing storage, and an empty store needs no migration:
 
 ```bash
-curl -X DELETE http://localhost:6333/collections/fusesearch   # or fusesearch-openai, fusesearch-ollama
+make stop
+rm -rf data/qdrant
+make build
+make start
 make index-all
 ```
 
+Using FuseSearch as a library with your own Qdrant: drop the collection (`fusesearch`, `fusesearch-openai` or `fusesearch-ollama`) and re-index. Chunks left from 0.2.3 or earlier are never updated or deleted, and `fusesearch index` warns about them.
+
 The MCP server now requires the MCP Python SDK 2.x, which the `[mcp]` extra installs.
+
+### Qdrant version
+
+The Docker setup pins the Qdrant server (`docker/qdrant.Dockerfile`, currently 1.20). A FuseSearch release raises it by at most one minor version, so updating release by release lets Qdrant migrate its storage on its own. If you skip releases, either update through them in order or delete `data/qdrant` and re-index. With your own Qdrant server, use 1.19–1.21: the client allows one minor version of difference.
 
 ## How It Works
 
