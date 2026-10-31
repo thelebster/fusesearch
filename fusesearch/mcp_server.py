@@ -1,7 +1,10 @@
-import os
 from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
+
+from fusesearch.config import load_settings
+
+_settings = load_settings()
 
 mcp = FastMCP(
     "FuseSearch",
@@ -10,13 +13,13 @@ mcp = FastMCP(
         "Use this server when the user asks factual questions, wants to look up a topic, "
         "or needs information that might exist in indexed sources."
     ),
-    host=os.getenv("MCP_HOST", "0.0.0.0"),
-    port=int(os.getenv("MCP_PORT", "8001")),
+    host=_settings.mcp_host,
+    port=_settings.mcp_port,
     # Stateless mode: each request is independent, no persistent sessions.
     # Prevents 404 errors when clients reconnect after server restarts (e.g. Docker rebuild).
     # Disable if you need server-to-client notifications or server-initiated sampling.
     # https://gofastmcp.com/python-sdk/fastmcp-server-http
-    stateless_http=os.getenv("MCP_STATELESS", "true").lower() == "true",
+    stateless_http=_settings.mcp_stateless,
 )
 
 # Lazy-initialized globals
@@ -25,8 +28,6 @@ _store = None
 _reranker = None
 
 RERANK_OVERFETCH = 3
-_hybrid_default = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
-_rerank_default = os.getenv("FUSESEARCH_RERANK", "false").lower() == "true"
 
 
 def _get_embedder():
@@ -34,7 +35,7 @@ def _get_embedder():
     if _embedder is None:
         from fusesearch.core.embedder import create_embedder
 
-        _embedder = create_embedder()
+        _embedder = create_embedder(_settings.embedder_provider)
     return _embedder
 
 
@@ -45,8 +46,8 @@ def _get_store():
 
         embedder = _get_embedder()
         _store = QdrantStore(
-            host=os.getenv("QDRANT_HOST", "localhost"),
-            port=int(os.getenv("QDRANT_PORT", "6333")),
+            host=_settings.qdrant_host,
+            port=_settings.qdrant_port,
             dimension=embedder.dimension,
             collection_suffix=embedder.name,
         )
@@ -66,8 +67,8 @@ def _get_reranker():
 def search(
     query: str,
     limit: int = 5,
-    hybrid: bool = _hybrid_default,
-    rerank: bool = _rerank_default,
+    hybrid: bool = _settings.hybrid,
+    rerank: bool = _settings.rerank,
 ) -> str:
     """Search the FuseSearch knowledge base. Use this tool whenever the user asks a factual or knowledge question — about a topic, concept, person, event, or anything that indexed documents might answer. Returns relevant document chunks with source titles and scores. Always search BEFORE answering knowledge questions."""
     embedder = _get_embedder()

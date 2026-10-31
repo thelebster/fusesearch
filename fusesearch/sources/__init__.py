@@ -26,6 +26,13 @@ def create_adapter(source: str, source_config: dict | None = None) -> SourceAdap
     if source == "confluence":
         from fusesearch.sources.confluence import ConfluenceAdapter
 
-        return ConfluenceAdapter(spaces=config.get("spaces"))
+        return ConfluenceAdapter(
+            url=config.get("url"),
+            username=config.get("username"),
+            api_token=config.get("api_token"),
+            password=config.get("password"),
+            spaces=config.get("spaces"),
+            cloud=config.get("cloud"),
+        )
 
     raise ValueError(f"Unknown source type: {source!r}")

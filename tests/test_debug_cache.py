@@ -5,8 +5,13 @@ from fusesearch.core.debug_cache import dump_documents
 from fusesearch.models import Document
 
 
-def _make_doc(source_type="local_files", source_id="doc-1", title="Test Doc",
-              content="# Hello\nWorld", url=None):
+def _make_doc(
+    source_type="local_files",
+    source_id="doc-1",
+    title="Test Doc",
+    content="# Hello\nWorld",
+    url=None,
+):
     return Document(
         source_type=source_type,
         source_id=source_id,

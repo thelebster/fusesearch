@@ -1,0 +1,67 @@
+# FuseSearch configuration file.
+# Copy to fusesearch.yaml and customize.
+# Resolution order (highest wins): CLI args > env vars > config file > built-in defaults.
+
+settings:
+  # Qdrant vector store connection.
+  qdrant:
+    host: qdrant
+    port: 6333
+    collection: fusesearch
+
+  # Embedding provider and model.
+  embedder:
+    provider: local                    # local, openai, or ollama
+    model: all-MiniLM-L6-v2
+
+  # Search defaults.
+  search:
+    hybrid: true                       # Combined vector + BM25 keyword search
+    rerank: false                      # Cross-encoder reranking (requires sentence-transformers)
+
+  # LLM provider for the "ask" command.
+  llm:
+    provider: anthropic                # anthropic, openai, or ollama
+
+  # Debug cache: dump pre-chunking documents to disk for inspection.
+  debug_cache:
+    enabled: false
+    directory: ./data/cache
+
+  # FastAPI REST API server.
+  api:
+    host: 0.0.0.0
+    port: 8000
+
+  # MCP server (streamable HTTP transport).
+  mcp:
+    host: 0.0.0.0
+    port: 8001
+    stateless: true
+
+# Named sources to index.
+# Use `fusesearch index --all` to index everything, or `fusesearch index --source <name>`.
+sources:
+  # Local markdown/text files.
+  blog-posts:
+    type: local_files
+    paths:
+      - /app/data/docs
+      # - /app/data/blog
+
+  # Confluence Cloud example.
+  # eng-wiki:
+  #   type: confluence
+  #   url: https://myorg.atlassian.net/wiki
+  #   username: user@example.com
+  #   api_token: ${CONFLUENCE_API_TOKEN}    # env var interpolation for secrets
+  #   spaces: [DEV, ENG]
+  #   cloud: true
+
+  # Multiple Confluence instances are supported — each source gets its own credentials.
+  # product-wiki:
+  #   type: confluence
+  #   url: https://product.atlassian.net/wiki
+  #   username: user@example.com
+  #   api_token: ${PRODUCT_CONFLUENCE_TOKEN}
+  #   spaces: [PROD, DESIGN]

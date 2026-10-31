@@ -1,5 +1,6 @@
 from importlib.metadata import version
 
+from fusesearch.config import FuseSearchConfig, load_config, load_settings
 from fusesearch.core.embedder import Embedder, create_embedder
 from fusesearch.core.reranker import Reranker, create_reranker
 from fusesearch.core.synthesizer import synthesize
@@ -23,6 +24,7 @@ __all__ = [
     "ConfluenceAdapter",
     "Document",
     "Embedder",
+    "FuseSearchConfig",
     "Indexer",
     "LocalFilesAdapter",
     "QdrantStore",
@@ -32,6 +34,8 @@ __all__ = [
     "create_embedder",
     "create_llm",
     "create_reranker",
+    "load_config",
+    "load_settings",
     "synthesize",
     "__version__",
 ]

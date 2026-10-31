@@ -1,24 +1,23 @@
-import os
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from fusesearch import __version__
+from fusesearch.config import load_settings
 from fusesearch.core.embedder import create_embedder
 from fusesearch.core.reranker import rerank_enabled
 from fusesearch.indexer import Indexer
 from fusesearch.sources import create_adapter
 from fusesearch.store.qdrant import QdrantStore
 
+settings = load_settings()
+
 app = FastAPI(title="FuseSearch", version=__version__)
 
-embedder = create_embedder()
+embedder = create_embedder(settings.embedder_provider)
 
-qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
 store = QdrantStore(
-    host=qdrant_host,
-    port=qdrant_port,
+    host=settings.qdrant_host,
+    port=settings.qdrant_port,
     dimension=embedder.dimension,
     collection_suffix=embedder.name,
 )
@@ -42,7 +41,7 @@ def _get_reranker():
 class SearchRequest(BaseModel):
     query: str
     limit: int = 5
-    hybrid: bool = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
+    hybrid: bool = settings.hybrid
     rerank: bool = rerank_enabled()
     vector_weight: float = 0.7
 
@@ -50,7 +49,7 @@ class SearchRequest(BaseModel):
 class AskRequest(BaseModel):
     query: str
     limit: int = 5
-    hybrid: bool = os.getenv("FUSESEARCH_HYBRID", "true").lower() == "true"
+    hybrid: bool = settings.hybrid
     rerank: bool = rerank_enabled()
     vector_weight: float = 0.7
 
@@ -59,8 +58,8 @@ class IndexRequest(BaseModel):
     source: str = "local_files"
     source_config: dict = {}
     since: str | None = None
-    debug_cache: bool = os.getenv("FUSESEARCH_DEBUG_CACHE", "false").lower() == "true"
-    cache_dir: str = os.getenv("FUSESEARCH_CACHE_DIR", "./data/cache")
+    debug_cache: bool = settings.debug_cache_enabled
+    cache_dir: str = settings.debug_cache_dir
 
 
 @app.get("/health")
@@ -111,7 +110,13 @@ def ask(req: AskRequest):
 
 @app.post("/index")
 def index(req: IndexRequest):
-    adapter = create_adapter(req.source, req.source_config)
+    # Support named source from config file
+    if req.source in settings.sources and not req.source_config:
+        src = settings.sources[req.source]
+        source_config = src.model_dump(exclude_none=True)
+        adapter = create_adapter(src.type, source_config)
+    else:
+        adapter = create_adapter(req.source, req.source_config)
 
     if req.since:
         documents = list(adapter.fetch_updated(since=req.since))

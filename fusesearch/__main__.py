@@ -2,65 +2,151 @@ import argparse
 import os
 
 
-def _make_embedder(provider: str | None = None):
+def _load_settings(args):
+    """Load config file + env vars into ResolvedSettings."""
+    from fusesearch.config import load_settings
+
+    config_path = getattr(args, "config", None)
+    return load_settings(config_path)
+
+
+def _make_embedder(settings=None, provider: str | None = None):
     from fusesearch.core.embedder import create_embedder
 
+    if provider is None and settings is not None:
+        provider = settings.embedder_provider
     return create_embedder(provider)
 
 
-def _make_store(embedder):
+def _make_store(embedder, settings=None):
     from fusesearch.store.qdrant import QdrantStore
 
+    if settings is not None:
+        host = settings.qdrant_host
+        port = settings.qdrant_port
+    else:
+        host = os.getenv("QDRANT_HOST", "localhost")
+        port = int(os.getenv("QDRANT_PORT", "6333"))
+
     return QdrantStore(
-        host=os.getenv("QDRANT_HOST", "localhost"),
-        port=int(os.getenv("QDRANT_PORT", "6333")),
+        host=host,
+        port=port,
         dimension=embedder.dimension,
         collection_suffix=embedder.name,
     )
 
 
+def _resolve_adapters(args, settings):
+    """Determine which adapters to create based on CLI args and config.
+
+    Returns list of (name, adapter) tuples.
+    """
+    from fusesearch.sources import create_adapter
+
+    source_arg = getattr(args, "source", None)
+    paths = getattr(args, "paths", [])
+    index_all = getattr(args, "all", False)
+
+    # 1. Legacy: positional paths provided
+    if paths:
+        adapter = create_adapter("local_files", {"paths": paths})
+        return [("local_files", adapter)]
+
+    # 2. --source flag: named source from config or legacy type name
+    if source_arg:
+        # Check if it's a named source in config
+        if source_arg in settings.sources:
+            src = settings.sources[source_arg]
+            config_dict = src.model_dump(exclude_none=True)
+            adapter = create_adapter(src.type, config_dict)
+            return [(source_arg, adapter)]
+
+        # Fallback: treat as legacy type name (e.g. "confluence", "local_files")
+        if source_arg == "confluence":
+            config = {"spaces": getattr(args, "spaces", None)}
+        else:
+            config = {"paths": paths}
+        adapter = create_adapter(source_arg, config)
+        return [(source_arg, adapter)]
+
+    # 3. --all flag or no args with config sources: index all sources from config
+    if index_all or settings.sources:
+        if not settings.sources:
+            print("No sources defined in config file.")
+            return []
+        adapters = []
+        for name, src in settings.sources.items():
+            config_dict = src.model_dump(exclude_none=True)
+            adapter = create_adapter(src.type, config_dict)
+            adapters.append((name, adapter))
+        return adapters
+
+    # 4. No config, no args — show help
+    print("No paths or sources specified. Use positional paths, --source, or --all.")
+    return []
+
+
 def cmd_serve(args):
     import uvicorn
 
-    host = args.host or os.getenv("FUSESEARCH_HOST", "0.0.0.0")
-    port = int(args.port or os.getenv("FUSESEARCH_PORT", "8000"))
+    settings = _load_settings(args)
+    host = args.host or settings.api_host
+    port = int(args.port) if args.port else settings.api_port
+
+    # Pass config path to API server via env so it picks up the same config
+    config_path = getattr(args, "config", None)
+    if config_path:
+        os.environ["FUSESEARCH_CONFIG"] = config_path
+
     uvicorn.run("fusesearch.api.server:app", host=host, port=port)
-
-
-def _make_adapter(args):
-    """Create a source adapter based on CLI args."""
-    from fusesearch.sources import create_adapter
-
-    source = getattr(args, "source", "local_files")
-
-    if source == "confluence":
-        config = {"spaces": getattr(args, "spaces", None)}
-    else:
-        config = {"paths": args.paths}
-
-    return create_adapter(source, config)
 
 
 def cmd_index(args):
     from fusesearch.indexer import Indexer
 
-    embedder = _make_embedder(args.embedder)
-    store = _make_store(embedder)
+    settings = _load_settings(args)
+    embedder = _make_embedder(settings, args.embedder)
+    store = _make_store(embedder, settings)
 
-    adapter = _make_adapter(args)
+    adapters = _resolve_adapters(args, settings)
+    if not adapters:
+        return
+
     since = getattr(args, "since", None)
-    if since:
-        documents = list(adapter.fetch_updated(since=since))
-    else:
-        documents = list(adapter.fetch())
-    print(f"Found {len(documents)} documents")
-
     cache_dir = args.cache_dir if args.debug_cache else None
     indexer = Indexer(store=store, embedder=embedder, cache_dir=cache_dir)
-    stats = indexer.index_documents(documents)
-    print(
-        f"Indexed: {stats['new']} new, {stats['skipped']} skipped, {stats['deleted']} deleted"
-    )
+
+    total_docs = 0
+    total_stats = {"new": 0, "skipped": 0, "deleted": 0}
+
+    for name, adapter in adapters:
+        if len(adapters) > 1:
+            print(f"\n--- Source: {name} ---")
+
+        if since:
+            documents = list(adapter.fetch_updated(since=since))
+        else:
+            documents = list(adapter.fetch())
+        print(f"Found {len(documents)} documents")
+
+        stats = indexer.index_documents(documents)
+        print(
+            f"Indexed: {stats['new']} new, {stats['skipped']} skipped, "
+            f"{stats['deleted']} deleted"
+        )
+
+        total_docs += len(documents)
+        for key in total_stats:
+            total_stats[key] += stats[key]
+
+    if len(adapters) > 1:
+        print("\n--- Total ---")
+        print(f"Found {total_docs} documents across {len(adapters)} sources")
+        print(
+            f"Indexed: {total_stats['new']} new, {total_stats['skipped']} skipped, "
+            f"{total_stats['deleted']} deleted"
+        )
+
     print(f"Total chunks in store: {store.count()}")
 
 
@@ -68,8 +154,9 @@ RERANK_OVERFETCH = 3
 
 
 def cmd_search(args):
-    embedder = _make_embedder(args.embedder)
-    store = _make_store(embedder)
+    settings = _load_settings(args)
+    embedder = _make_embedder(settings, args.embedder)
+    store = _make_store(embedder, settings)
     hybrid = not args.no_hybrid
 
     results = _run_search(store, embedder, args.query, args.limit, hybrid, args.rerank)
@@ -107,8 +194,9 @@ def cmd_ask(args):
     from fusesearch.core.synthesizer import synthesize
     from fusesearch.llm import create_llm
 
-    embedder = _make_embedder(args.embedder)
-    store = _make_store(embedder)
+    settings = _load_settings(args)
+    embedder = _make_embedder(settings, args.embedder)
+    store = _make_store(embedder, settings)
     hybrid = not args.no_hybrid
 
     results = _run_search(store, embedder, args.query, args.limit, hybrid, args.rerank)
@@ -136,6 +224,11 @@ def main():
         prog="fusesearch", description="FuseSearch - multi-source search"
     )
     parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to fusesearch.yaml config file",
+    )
+    parser.add_argument(
         "--embedder",
         choices=["local", "openai", "ollama"],
         default=None,
@@ -155,9 +248,15 @@ def main():
     )
     index_parser.add_argument(
         "--source",
-        choices=["local_files", "confluence"],
-        default="local_files",
-        help="Source adapter to use (default: local_files)",
+        default=None,
+        help="Source name from config or adapter type (local_files, confluence)",
+    )
+    index_parser.add_argument(
+        "--all",
+        "-a",
+        action="store_true",
+        default=False,
+        help="Index all sources defined in config file",
     )
     index_parser.add_argument(
         "--spaces",
@@ -249,11 +348,16 @@ def main():
     elif args.command == "ask":
         cmd_ask(args)
     elif args.command == "mcp":
+        # Pass config path to MCP server via env
+        config_path = getattr(args, "config", None)
+        if config_path:
+            os.environ["FUSESEARCH_CONFIG"] = config_path
+
         from fusesearch.mcp_server import main as mcp_main
 
         mcp_main(transport=args.transport)
     else:
-        cmd_serve(argparse.Namespace(host=None, port=None))
+        cmd_serve(argparse.Namespace(host=None, port=None, config=None))
 
 
 if __name__ == "__main__":
